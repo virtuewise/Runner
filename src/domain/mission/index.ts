@@ -4,3 +4,4 @@ export * from "./pricing.ts";
 export * from "./engine.ts";
 export * from "./persistence.ts";
 export * from "./relay.ts";
+export * from "./postgres-repository.ts";
