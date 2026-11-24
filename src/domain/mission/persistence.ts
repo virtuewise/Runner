@@ -6,6 +6,8 @@ export type IdempotencyClaim =
   | { readonly kind: "conflict" };
 
 export interface MissionTransaction {
+  /** Inserts a newly created mission projection inside the current transaction. */
+  insertMission(mission: Mission): Promise<void>;
   /** Locks/loads the current mission row for an atomic command. */
   loadMissionForUpdate(missionId: string): Promise<Mission | null>;
   /** Loads current qualification from authoritative server-side records. */
