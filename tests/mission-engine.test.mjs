@@ -46,8 +46,8 @@ test("expired quotes and stale versions are rejected", () => {
 test("assignment requires qualified, verified, active Runner and jurisdiction", () => {
   const opened = openMission().value;
   assert.equal(assignRunner(opened,{...runner,identityVerified:false},ctx("dispatch-1",3,"dispatcher"),2).error.code,"INELIGIBLE_RUNNER");
-  assert.equal(assignRunner(opened,{...runner,jurisdictionCodes:["US"]},ctx("ops",3),2).error.code,"INELIGIBLE_RUNNER");
-  const assigned = assignRunner(opened,runner,ctx("ops",3),2);
+  assert.equal(assignRunner(opened,{...runner,jurisdictionCodes:["US"]},ctx("dispatch-1",3,"dispatcher"),2).error.code,"INELIGIBLE_RUNNER");
+  const assigned = assignRunner(opened,runner,ctx("dispatch-1",3,"dispatcher"),2);
   assert.equal(assigned.ok,true);
   assert.equal(assigned.value.assignedRunnerId,"runner-1");
 });
