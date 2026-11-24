@@ -84,12 +84,13 @@ export function planRelay(input: {
 
   interface State { node: string; arrival: number; cost: number; score: number; path: RelayEdge[]; }
   const queue: State[] = [{ node: origin, arrival: Date.parse(earliestDepartureAt), cost: 0, score: 0, path: [] }];
-  const best = new Map<string, number>();
+  const labels = new Map<string, State[]>();
   while (queue.length) {
     queue.sort((a, b) => a.score - b.score);
     const current = queue.shift()!;
     const stateKey = `${current.node}:${current.path.length}`;
-    if ((best.get(stateKey) ?? Infinity) < current.score) continue;
+    const currentLabels = labels.get(stateKey) ?? [];
+    if (currentLabels.some((label) => label !== current && label.score <= current.score && label.arrival <= current.arrival && label.cost <= current.cost)) continue;
     if (current.node === destination) {
       return { ok: true, plan: {
         edges: current.path, totalCostMinor: current.cost,
@@ -109,10 +110,10 @@ export function planRelay(input: {
       const score = current.score + edgeWeight(edge, policy);
       const next: State = { node: edge.to, arrival: Date.parse(edge.arrivalAt), cost, score, path: [...current.path, edge] };
       const key = `${next.node}:${next.path.length}`;
-      if (score < (best.get(key) ?? Infinity)) {
-        best.set(key, score);
-        queue.push(next);
-      }
+      const existing = labels.get(key) ?? [];
+      if (existing.some((label) => label.score <= next.score && label.arrival <= next.arrival && label.cost <= next.cost)) continue;
+      labels.set(key, [...existing.filter((label) => !(next.score <= label.score && next.arrival <= label.arrival && next.cost <= label.cost)), next]);
+      queue.push(next);
     }
   }
   return { ok: false, reason: "NO_FEASIBLE_ROUTE" };
