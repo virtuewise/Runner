@@ -72,9 +72,11 @@ export function attachQuote(
   if (mission.version !== expectedVersion) return failure("VERSION_CONFLICT", "Mission changed; reload before retrying.");
   if (context.actorId !== mission.requesterId || context.actorRole !== "requester") return failure("FORBIDDEN", "Only the requesting account can quote this mission.");
   if (mission.status !== "draft") return failure("INVALID_TRANSITION", "Only draft missions can be quoted.");
-  if (Date.parse(quote.expiresAt) <= Date.parse(context.occurredAt) ||
-      !Number.isSafeInteger(quote.requesterTotal.amountMinor) || quote.requesterTotal.amountMinor < 0 ||
-      !quote.requesterTotal.currency || !quote.pricingVersion) {
+  const quoteAmounts = [quote.base, quote.distance, quote.handling, quote.platformFee, quote.runnerReward, quote.requesterTotal];
+  const quoteCurrency = quote.requesterTotal.currency;
+  if (!Number.isFinite(Date.parse(quote.expiresAt)) || Date.parse(quote.expiresAt) <= Date.parse(context.occurredAt) ||
+      quoteAmounts.some((amount) => !Number.isSafeInteger(amount.amountMinor) || amount.amountMinor < 0 || amount.currency !== quoteCurrency) ||
+      !/^[A-Z]{3}$/.test(quoteCurrency) || !quote.pricingVersion) {
     return failure("INVALID_INPUT", "Quote is invalid or already expired.");
   }
   const next: Mission = { ...mission, status: "quoted", quote, updatedAt: context.occurredAt, version: mission.version + 1 };
