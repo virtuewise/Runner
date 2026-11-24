@@ -7,7 +7,7 @@
 
 - Typed mission terms, quote, lifecycle, Runner qualification and audit event contracts.
 - Explicit lifecycle transition allow-list.
-- Requester ownership checks for creation, quoting and publication.
+- Requester ownership checks for creation and publication; quote attachment is restricted to the trusted pricing service and validates the full monetary breakdown.
 - Dispatch/system role gate for assignment; Runner identity, qualification, activity, capability and jurisdiction checks.
 - Trust-operator-only safety/dispute/closure actions.
 - Expected-version checks to reject stale writes.
