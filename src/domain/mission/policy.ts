@@ -1,4 +1,4 @@
-import type { Mission, MissionStatus, RunnerEligibility } from "./types";
+import type { Mission, MissionStatus, RunnerEligibility } from "./types.ts";
 
 const TRANSITIONS: Readonly<Record<MissionStatus, readonly MissionStatus[]>> = {
   draft: ["quoted", "cancelled"],
