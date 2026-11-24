@@ -29,7 +29,7 @@ export function calculateQuote(input: QuoteInput): MissionQuote {
   if (policy.platformFeeBasisPoints + policy.runnerShareBasisPoints > 10_000) {
     throw new Error("Pricing basis points cannot exceed 10000");
   }
-  if (!/^[A-Z]{3}$/.test(policy.currency) || !policy.version || !Number.isFinite(Date.parse(input.now)) || policy.quoteValidityMinutes <= 0) {
+  if (!/^[A-Z]{3}$/.test(policy.currency) || policy.currency !== terms.currency || !policy.version || !Number.isFinite(Date.parse(input.now)) || policy.quoteValidityMinutes <= 0) {
     throw new Error("Pricing policy and timestamp are invalid");
   }
   const money = (amountMinor: number): Money => ({ amountMinor, currency: policy.currency });
