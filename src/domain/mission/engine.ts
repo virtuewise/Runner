@@ -1,8 +1,8 @@
-import { canTransition, isRunnerEligible } from "./policy";
+import { canTransition, isRunnerEligible } from "./policy.ts";
 import type {
   CommandContext, DomainResult, Mission, MissionEvent, MissionQuote,
   MissionStatus, MissionTerms, RunnerEligibility,
-} from "./types";
+} from "./types.ts";
 
 function failure<T>(code: Extract<DomainResult<T>, { ok: false }>["error"]["code"], message: string): DomainResult<T> {
   return { ok: false, error: { code, message } };
