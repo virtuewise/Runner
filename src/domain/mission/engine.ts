@@ -60,7 +60,8 @@ export function createMission(input: {
     createdAt: context.occurredAt, updatedAt: context.occurredAt, version: 0,
   };
   const created = event(mission, context, "mission.created", "draft");
-  return { ok: true, value: mission, events: [created] };
+  const persisted = { ...mission, version: 1 };
+  return { ok: true, value: persisted, events: [created] };
 }
 
 export function attachQuote(
@@ -112,7 +113,8 @@ export function transitionMission(
   if (!validContext(context)) return failure("INVALID_INPUT", "Command context is invalid.");
   if (mission.version !== expectedVersion) return failure("VERSION_CONFLICT", "Mission changed; reload before retrying.");
   const isRequesterCancellation = toStatus === "cancelled" && context.actorId === mission.requesterId && context.actorRole === "requester";
-  const isAssignedRunner = Boolean(mission.assignedRunnerId && context.actorId === mission.assignedRunnerId && context.actorRole === "runner");
+  const runnerAllowed = ["runner_en_route", "at_pickup", "in_custody", "en_route_to_destination", "delivered", "failed"].includes(toStatus);
+  const isAssignedRunner = Boolean(runnerAllowed && mission.assignedRunnerId && context.actorId === mission.assignedRunnerId && context.actorRole === "runner");
   const isTrustAction = context.actorRole === "trust_operator" && (toStatus === "safety_hold" || toStatus === "disputed" || toStatus === "closed");
   if (!isRequesterCancellation && !isAssignedRunner && !isTrustAction) return failure("FORBIDDEN", "Actor is not authorized for this mission transition.");
   if (!canTransition(mission.status, toStatus)) return failure("INVALID_TRANSITION", `Transition ${mission.status} -> ${toStatus} is not allowed.`);
