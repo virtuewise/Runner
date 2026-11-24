@@ -1,19 +1,34 @@
-import type { Mission, MissionEvent } from "./types.ts";
+import type { Mission, MissionEvent, RunnerEligibility } from "./types.ts";
+
+export type IdempotencyClaim =
+  | { readonly kind: "claimed" }
+  | { readonly kind: "replay"; readonly responseStatus: number; readonly responseBody: unknown }
+  | { readonly kind: "conflict" };
 
 export interface MissionTransaction {
   /** Locks/loads the current mission row for an atomic command. */
   loadMissionForUpdate(missionId: string): Promise<Mission | null>;
+  /** Loads current qualification from authoritative server-side records. */
+  loadRunnerEligibility(runnerId: string): Promise<RunnerEligibility | null>;
   /** Persists only when the stored version equals expectedVersion. */
   saveMission(mission: Mission, expectedVersion: number): Promise<boolean>;
   /** Appends events in the same transaction as the projection update. */
   appendEvents(events: readonly MissionEvent[]): Promise<void>;
-  /** Claims an actor/scope/key tuple. Replays must return the original response. */
+  /** Claims a key; matching retries return the original response, mismatched bodies conflict. */
   claimIdempotency(input: {
     actorId: string;
     scope: string;
     key: string;
     requestHash: string;
-  }): Promise<"claimed" | "replay" | "conflict">;
+  }): Promise<IdempotencyClaim>;
+  /** Stores the response in the same transaction as the business operation. */
+  completeIdempotency(input: {
+    actorId: string;
+    scope: string;
+    key: string;
+    responseStatus: number;
+    responseBody: unknown;
+  }): Promise<void>;
 }
 
 export interface MissionUnitOfWork {
@@ -22,7 +37,7 @@ export interface MissionUnitOfWork {
 
 /**
  * Production adapters must implement this with one database transaction.
- * Never implement appendEvents and saveMission as independent commits.
+ * Idempotency receipt, projection update and event append must commit or roll back together.
  */
 export interface MissionRepository {
   readonly unitOfWork: MissionUnitOfWork;
