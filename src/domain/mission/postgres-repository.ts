@@ -61,7 +61,8 @@ function manifestFromMission(mission: Mission): Record<string, unknown> {
 }
 
 class PostgresMissionTransaction implements MissionTransaction {
-  constructor(private readonly client: PgClient) {}
+  private readonly client: PgClient;
+  constructor(client: PgClient) { this.client = client; }
 
   async insertMission(mission: Mission): Promise<void> {
     await this.client.query(
