@@ -47,7 +47,7 @@ test("assignment requires qualified, verified, active Runner and jurisdiction", 
   const opened = openMission().value;
   assert.equal(assignRunner(opened,{...runner,identityVerified:false},ctx("dispatch-1",3,"dispatcher"),3).error.code,"INELIGIBLE_RUNNER");
   assert.equal(assignRunner(opened,{...runner,jurisdictionCodes:["US"]},ctx("dispatch-1",3,"dispatcher"),3).error.code,"INELIGIBLE_RUNNER");
-  const assigned = assignRunner(opened,runner,ctx("dispatch-1",3,"dispatcher"),2);
+  const assigned = assignRunner(opened,runner,ctx("dispatch-1",3,"dispatcher"),3);
   assert.equal(assigned.ok,true);
   assert.equal(assigned.value.assignedRunnerId,"runner-1");
 });
