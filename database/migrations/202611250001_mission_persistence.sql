@@ -4,6 +4,32 @@ begin;
 
 create extension if not exists pgcrypto;
 
+create table public.runner_profiles (
+  runner_id uuid primary key,
+  identity_status text not null check (identity_status in ('unverified','pending','verified','rejected','expired')),
+  qualification_status text not null check (qualification_status in ('pending','qualified','suspended','revoked')),
+  is_active boolean not null default false,
+  trust_tier text not null default 'new',
+  max_declared_value_minor bigint not null default 0 check (max_declared_value_minor >= 0),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table public.runner_capabilities (
+  runner_id uuid not null references public.runner_profiles(runner_id) on delete restrict,
+  capability_code text not null,
+  status text not null check (status in ('pending','verified','suspended','revoked')),
+  valid_until timestamptz,
+  primary key (runner_id, capability_code)
+);
+
+create table public.runner_jurisdictions (
+  runner_id uuid not null references public.runner_profiles(runner_id) on delete restrict,
+  country_code char(2) not null,
+  status text not null check (status in ('pending','approved','suspended','revoked')),
+  primary key (runner_id, country_code)
+);
+
 create table public.missions (
   id uuid primary key default gen_random_uuid(),
   requester_id uuid not null,
@@ -46,7 +72,7 @@ create table public.mission_legs (
   origin jsonb not null,
   destination jsonb not null,
   jurisdiction_codes text[] not null default '{}',
-  assigned_runner_id uuid,
+  assigned_runner_id uuid references public.runner_profiles(runner_id) on delete restrict,
   estimated_distance_metres integer check (estimated_distance_metres is null or estimated_distance_metres >= 0),
   sequence_version bigint not null default 0 check (sequence_version >= 0),
   created_at timestamptz not null default now(),
@@ -124,5 +150,9 @@ $$;
 create trigger mission_events_no_update
   before update or delete on public.mission_events
   for each row execute function public.reject_mission_event_mutation();
+
+create trigger mission_events_no_truncate
+  before truncate on public.mission_events
+  for each statement execute function public.reject_mission_event_mutation();
 
 commit;
