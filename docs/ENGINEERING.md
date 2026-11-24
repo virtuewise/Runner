@@ -19,7 +19,18 @@ The initial universal client is aligned to the stable Expo SDK 58 release train.
 
 Expo SDK 58 officially targets React Native 0.88, React 19.3.0 and Node.js 22.13.x minimum. Expo Router's SDK 58 recommended line is ~58.0.32. Keep Expo-managed native dependencies aligned using the Expo installer, then run expo-doctor.
 
-Only stable releases are allowed in production. Do not use alpha, beta, canary, nightly, RC, dev, experimental or floating latest tags in production dependency manifests. Pin direct dependencies; commit the lockfile. Review transitive dependency changes before merging.
+Only stable releases are allowed in production. Do not use alpha, beta, canary, nightly, RC, dev, experimental or floating latest tags in production dependency manifests. Pin direct dependencies and commit the lockfile. The initial repository seed does not yet contain a generated lockfile; generate it after running the SDK-aware installation step below, then commit it before enabling release automation. Review transitive dependency changes before merging.
+
+### First install
+
+Use the Expo SDK-aware installer to resolve the Router native peers to the exact SDK 58-compatible versions rather than guessing their versions:
+
+1. npm install
+2. npx expo install expo-router react-native-safe-area-context react-native-screens expo-linking expo-constants expo-status-bar react-native-web react-dom
+3. npx expo install --fix
+4. npx expo-doctor
+5. npm run typecheck
+6. Commit the generated package-lock.json and any aligned manifest changes.
 
 ## Required checks
 
