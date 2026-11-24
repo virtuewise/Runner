@@ -26,10 +26,10 @@ export function calculateQuote(input: QuoteInput): MissionQuote {
   if (numericValues.some((value) => !Number.isFinite(value) || value < 0)) {
     throw new Error("Pricing inputs must be finite non-negative numbers");
   }
-  if (policy.platformFeeBasisPoints > 10_000 || policy.runnerShareBasisPoints > 10_000) {
+  if (policy.platformFeeBasisPoints + policy.runnerShareBasisPoints > 10_000) {
     throw new Error("Pricing basis points cannot exceed 10000");
   }
-  if (!policy.currency || !policy.version || !Number.isFinite(Date.parse(input.now))) {
+  if (!/^[A-Z]{3}$/.test(policy.currency) || !policy.version || !Number.isFinite(Date.parse(input.now)) || policy.quoteValidityMinutes <= 0) {
     throw new Error("Pricing policy and timestamp are invalid");
   }
   const money = (amountMinor: number): Money => ({ amountMinor, currency: policy.currency });
