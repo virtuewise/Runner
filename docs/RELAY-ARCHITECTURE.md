@@ -41,4 +41,4 @@ A shortest-path algorithm can rank feasible candidate routes, but policy filteri
 
 Store only a cryptographic hash of handover tokens. Generate high-entropy, short-lived challenges server-side, bind them to a specific mission, leg pair and two actors, and rate-limit attempts. Do not put raw tokens, full identity documents or precise location trails into event payloads. Restrict location retention and access by active mission role.
 
-The migration is a schema baseline, not a production-ready deployment. Before production, add provider-specific authentication mapping, row-level security, least-privilege grants, encryption/retention policies, backup/restore drills and jurisdiction-specific compliance review.
+The migration is provider-neutral PostgreSQL DDL and includes authoritative Runner profile, capability and jurisdiction records. The migration is a schema baseline, not a production-ready deployment. Before production, add provider-specific authentication mapping, row-level security, least-privilege grants, encryption/retention policies, backup/restore drills and jurisdiction-specific compliance review.
