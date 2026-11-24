@@ -18,7 +18,7 @@ const runner = { runnerId:"runner-1", identityVerified:true, qualified:true, act
 function openMission() {
   const created = createMission({id:"mission-1",requesterId:"requester-1",terms,context:ctx("requester-1",0)});
   assert.equal(created.ok,true);
-  const quoted = attachQuote(created.value,quote,ctx("requester-1",1),1);
+  const quoted = attachQuote(created.value,quote,ctx("pricing-service",1,"system"),1);
   assert.equal(quoted.ok,true);
   return publishMission(quoted.value,ctx("requester-1",2),2);
 }
@@ -38,7 +38,7 @@ test("mission follows draft -> quoted -> open with sequenced audit events", () =
 
 test("expired quotes and stale versions are rejected", () => {
   const created = createMission({id:"m",requesterId:"r",terms,context:ctx("r",0)});
-  const expired = attachQuote(created.value,{...quote,expiresAt:"2026-11-24T09:00:00.000Z"},ctx("r",1),1);
+  const expired = attachQuote(created.value,{...quote,expiresAt:"2026-11-24T09:00:00.000Z"},ctx("pricing-service",1,"system"),1);
   assert.equal(expired.error.code,"INVALID_INPUT");
   assert.equal(publishMission(created.value,ctx("r",2),99).error.code,"VERSION_CONFLICT");
 });
