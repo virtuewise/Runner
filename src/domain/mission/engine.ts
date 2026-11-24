@@ -23,6 +23,7 @@ function event(
     type,
     occurredAt: context.occurredAt,
     actorId: context.actorId,
+    actorRole: context.actorRole,
     idempotencyKey: context.idempotencyKey,
     ...(fromStatus ? { fromStatus } : {}),
     toStatus,
