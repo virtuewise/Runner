@@ -11,6 +11,7 @@
 - Dispatch/system role gate for assignment; Runner identity, qualification, activity, capability and jurisdiction checks.
 - Trust-operator-only safety/dispute/closure actions.
 - Expected-version checks to reject stale writes.
+- PostgreSQL unit-of-work adapter for transactional mission writes, event appends, authoritative Runner eligibility reads and idempotency receipt replay.
 - Quote calculation in integer minor currency units, with a versioned pricing policy and explicit expiry.
 - Audit event envelopes with actor, event ID, idempotency key, sequence and timestamp.
 - Node test suite for core happy paths and rejection cases.
@@ -23,7 +24,7 @@ Exceptional states are explicit and policy-gated: `cancelled`, `expired`, `faile
 
 ## Important boundary
 
-This is the domain decision layer, not yet a production dispatch service. The API/persistence adapter must atomically append emitted events and update the mission projection in one transaction, enforce uniqueness for `eventId` and `idempotencyKey`, apply authorization from authenticated server-side identity, and reject stale versions with compare-and-swap semantics. The client must never be trusted to supply its own role or eligibility claims.
+This is the domain decision layer, not yet a production dispatch service. The API must call the PostgreSQL unit-of-work adapter so idempotency receipts, event appends and mission projection updates commit atomically. It must apply authorization from authenticated server-side identity and reject stale versions with compare-and-swap semantics. The client must never be trusted to supply its own role or eligibility claims.
 
 Runner assignment currently checks the declared qualification snapshot passed to the domain function. Production must load that snapshot from authoritative verification and qualification records at assignment time.
 
