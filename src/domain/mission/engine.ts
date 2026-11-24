@@ -36,7 +36,7 @@ function validContext(context: CommandContext): boolean {
 }
 
 function validTerms(terms: MissionTerms): boolean {
-  return Boolean(terms.description.trim() && terms.pickup.countryCode &&
+  return Boolean(terms.description.trim() && /^[A-Z]{3}$/.test(terms.currency) && terms.pickup.countryCode &&
     terms.destination.countryCode && terms.pickup.locality && terms.destination.locality &&
     terms.pickup.addressLine && terms.destination.addressLine) &&
     Number.isSafeInteger(terms.declaredValueMinor) && terms.declaredValueMinor >= 0 &&
