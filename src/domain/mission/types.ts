@@ -1,7 +1,7 @@
 export const MISSION_STATUSES = [
-  "draft", "quoted", "open", "assigned", "runner_en_route", "at_pickup",
+  "draft", "quoted", "open", "matching", "assigned", "runner_en_route", "at_pickup",
   "in_custody", "en_route_to_destination", "delivered", "closed",
-  "cancelled", "expired", "failed", "disputed", "safety_hold",
+  "cancelled", "expired", "failed", "disputed", "safety_hold", "customs_hold",
 ] as const;
 
 export type MissionStatus = (typeof MISSION_STATUSES)[number];
@@ -71,7 +71,7 @@ export interface RunnerEligibility {
 
 export type MissionEventType =
   | "mission.created" | "mission.quoted" | "mission.opened"
-  | "mission.assigned" | "mission.status_changed" | "mission.cancelled";
+  | "mission.assigned" | "mission.status_changed" | "mission.cancelled" | "custody.handover_initiated" | "custody.handover_confirmed" | "relay.leg_assigned";
 
 export interface MissionEvent {
   readonly eventId: string;
