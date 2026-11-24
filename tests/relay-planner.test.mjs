@@ -11,7 +11,7 @@ test("relay planner chooses a feasible multi-hop route and respects handover buf
   const edges = [
     {id:"direct",from:"A",to:"B",runnerId:"r0",mode:"car",departureAt:"2026-11-24T10:00:00Z",arrivalAt:"2026-11-24T20:00:00Z",costMinor:9000,reliability:0.99,qualified:true,itemPermitted:true,jurisdictionApproved:true},
     {id:"leg-1",from:"A",to:"H",runnerId:"r1",mode:"car",departureAt:"2026-11-24T10:00:00Z",arrivalAt:"2026-11-24T11:00:00Z",costMinor:1000,reliability:0.98,qualified:true,itemPermitted:true,jurisdictionApproved:true},
-    {id:"leg-2",from:"H",to:"B",runnerId:"r2",mode:"rail",departureAt:"2026-11-24T11:20:00Z",arrivalAt:"2026-11-24T13:00:00Z",costMinor:1200,reliability:0.97,qualified:true,itemPermitted:true,jurisdictionApproved:true},
+    {id:"leg-2",from:"H",to:"B",runnerId:"r2",mode:"rail",departureAt:"2026-11-24T11:30:00Z",arrivalAt:"2026-11-24T13:00:00Z",costMinor:1200,reliability:0.97,qualified:true,itemPermitted:true,jurisdictionApproved:true},
   ];
   const result = planRelay({nodes,edges,origin:"A",destination:"B",earliestDepartureAt:"2026-11-24T09:00:00Z",
     policy:{maxLegs:3,maxCostMinor:5000,minutesWeight:1,costWeight:0.01,riskWeight:100}});
