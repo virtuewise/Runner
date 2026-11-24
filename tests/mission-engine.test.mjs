@@ -46,14 +46,14 @@ test("expired quotes and stale versions are rejected", () => {
 test("assignment requires qualified, verified, active Runner and jurisdiction", () => {
   const opened = openMission().value;
   assert.equal(assignRunner(opened,{...runner,identityVerified:false},ctx("dispatch-1",3,"dispatcher"),3).error.code,"INELIGIBLE_RUNNER");
-  assert.equal(assignRunner(opened,{...runner,jurisdictionCodes:["US"]},ctx("dispatch-1",3,"dispatcher"),2).error.code,"INELIGIBLE_RUNNER");
+  assert.equal(assignRunner(opened,{...runner,jurisdictionCodes:["US"]},ctx("dispatch-1",3,"dispatcher"),3).error.code,"INELIGIBLE_RUNNER");
   const assigned = assignRunner(opened,runner,ctx("dispatch-1",3,"dispatcher"),2);
   assert.equal(assigned.ok,true);
   assert.equal(assigned.value.assignedRunnerId,"runner-1");
 });
 
 test("only assigned Runner can advance custody lifecycle", () => {
-  const assigned = assignRunner(openMission().value,runner,ctx("ops",3),2).value;
+  const assigned = assignRunner(openMission().value,runner,ctx("dispatch-1",3,"dispatcher"),3).value;
   assert.equal(transitionMission(assigned,"runner_en_route",ctx("other",4,"runner"),4).error.code,"FORBIDDEN");
   const enRoute = transitionMission(assigned,"runner_en_route",ctx("runner-1",4,"runner"),4);
   assert.equal(enRoute.ok,true);
