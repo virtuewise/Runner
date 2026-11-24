@@ -22,6 +22,7 @@ export interface GeoAddress {
 export interface MissionTerms {
   readonly category: "document" | "parcel" | "retail_collection" | "other";
   readonly description: string;
+  readonly currency: CurrencyCode;
   readonly declaredValueMinor: number;
   readonly weightGrams: number;
   readonly pickup: GeoAddress;
@@ -80,6 +81,7 @@ export interface MissionEvent {
   readonly type: MissionEventType;
   readonly occurredAt: string;
   readonly actorId: ActorId;
+  readonly actorRole: CommandContext["actorRole"];
   readonly idempotencyKey: string;
   readonly fromStatus?: MissionStatus;
   readonly toStatus: MissionStatus;
