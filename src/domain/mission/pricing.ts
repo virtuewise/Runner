@@ -1,4 +1,4 @@
-import type { MissionTerms, MissionQuote, Money } from "./types";
+import type { MissionTerms, MissionQuote, Money } from "./types.ts";
 
 export interface PricingPolicy {
   readonly version: string;
