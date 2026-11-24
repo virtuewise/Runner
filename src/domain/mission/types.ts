@@ -88,6 +88,7 @@ export interface MissionEvent {
 
 export interface CommandContext {
   readonly actorId: ActorId;
+  readonly actorRole: "requester" | "runner" | "dispatcher" | "trust_operator" | "system";
   readonly occurredAt: string;
   readonly eventId: string;
   readonly idempotencyKey: string;
