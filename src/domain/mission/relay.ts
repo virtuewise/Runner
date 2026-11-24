@@ -38,9 +38,9 @@ export type RelayPlanResult =
   | { readonly ok: true; readonly plan: RelayPlan }
   | { readonly ok: false; readonly reason: "NO_FEASIBLE_ROUTE" | "INVALID_GRAPH" };
 
-function edgeWeight(edge: RelayEdge, policy: RelayPolicy): number {
+function edgeWeight(edge: RelayEdge, policy: RelayPolicy, waitMinutes: number): number {
   const durationMinutes = (Date.parse(edge.arrivalAt) - Date.parse(edge.departureAt)) / 60_000;
-  return durationMinutes * policy.minutesWeight +
+  return (durationMinutes + waitMinutes) * policy.minutesWeight +
     edge.costMinor * policy.costWeight +
     (1 - edge.reliability) * policy.riskWeight;
 }
@@ -107,7 +107,8 @@ export function planRelay(input: {
       if (departure < earliest) continue;
       const cost = current.cost + edge.costMinor;
       if (cost > policy.maxCostMinor) continue;
-      const score = current.score + edgeWeight(edge, policy);
+      const waitMinutes = (departure - earliest) / 60_000;
+      const score = current.score + edgeWeight(edge, policy, waitMinutes);
       const next: State = { node: edge.to, arrival: Date.parse(edge.arrivalAt), cost, score, path: [...current.path, edge] };
       const key = `${next.node}:${next.path.length}`;
       const existing = labels.get(key) ?? [];
