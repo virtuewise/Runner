@@ -48,7 +48,7 @@ Use `400` for malformed input, `401` for unauthenticated requests, `403` for aut
 For each mutation, the API must:
 
 1. Authenticate the request and derive actor/role server-side.
-2. Validate schema, scope, idempotency key and expected version.
+2. Validate schema, scope, idempotency key and expected version. Quote calculation is performed by the trusted pricing service; clients cannot submit or override quote amounts.
 3. Begin a database transaction and claim the idempotency receipt.
 4. If an identical completed receipt exists, return its original response.
 5. Lock the mission/leg and load authoritative Runner qualification and jurisdiction records where required.
