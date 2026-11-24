@@ -10,6 +10,7 @@ create table public.runner_profiles (
   qualification_status text not null check (qualification_status in ('pending','qualified','suspended','revoked')),
   is_active boolean not null default false,
   trust_tier text not null default 'new',
+  vehicle_class text check (vehicle_class in ('foot','bicycle','motorcycle','car','van')),
   max_declared_value_minor bigint not null default 0 check (max_declared_value_minor >= 0),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
