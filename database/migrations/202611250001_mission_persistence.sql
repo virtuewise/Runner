@@ -45,6 +45,7 @@ create table public.missions (
   declared_value_minor bigint not null check (declared_value_minor >= 0),
   currency char(3) not null check (currency = upper(currency)),
   quote jsonb,
+  assigned_runner_id uuid references public.runner_profiles(runner_id) on delete restrict,
   pricing_version text,
   quote_expires_at timestamptz,
   version bigint not null default 0 check (version >= 0),
