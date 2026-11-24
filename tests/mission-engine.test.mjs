@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createMission, attachQuote, publishMission, assignRunner, transitionMission, calculateQuote, canTransition } from "../src/domain/mission/index.ts";
 
 const terms = {
-  category: "parcel", description: "Sealed document pouch", declaredValueMinor: 0, weightGrams: 300,
+  category: "parcel", description: "Sealed document pouch", currency: "ZAR", declaredValueMinor: 0, weightGrams: 300,
   pickup: { countryCode: "ZA", locality: "Johannesburg", addressLine: "10 Main Road" },
   destination: { countryCode: "ZA", locality: "Sandton", addressLine: "20 Market Street" },
   requiredCapabilities: ["document-handling"], prohibitedItemScreeningPassed: true,
