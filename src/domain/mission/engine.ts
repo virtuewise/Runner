@@ -54,7 +54,7 @@ export function createMission(input: {
   if (!id || !requesterId || !validContext(context) || !validTerms(terms)) {
     return failure("INVALID_INPUT", "Mission identity, command context or declared terms are invalid.");
   }
-  if (context.actorId !== requesterId) return failure("FORBIDDEN", "Only the requester can create this mission.");
+  if (context.actorId !== requesterId || context.actorRole !== "requester") return failure("FORBIDDEN", "Only the requesting account can create this mission.");
   const mission: Mission = {
     id, requesterId, status: "draft", terms,
     createdAt: context.occurredAt, updatedAt: context.occurredAt, version: 0,
@@ -69,7 +69,7 @@ export function attachQuote(
 ): DomainResult<Mission> {
   if (!validContext(context)) return failure("INVALID_INPUT", "Command context is invalid.");
   if (mission.version !== expectedVersion) return failure("VERSION_CONFLICT", "Mission changed; reload before retrying.");
-  if (context.actorId !== mission.requesterId) return failure("FORBIDDEN", "Only the requester can quote this mission.");
+  if (context.actorId !== mission.requesterId || context.actorRole !== "requester") return failure("FORBIDDEN", "Only the requesting account can quote this mission.");
   if (mission.status !== "draft") return failure("INVALID_TRANSITION", "Only draft missions can be quoted.");
   if (Date.parse(quote.expiresAt) <= Date.parse(context.occurredAt) ||
       !Number.isSafeInteger(quote.requesterTotal.amountMinor) || quote.requesterTotal.amountMinor < 0 ||
@@ -85,7 +85,7 @@ export function publishMission(
 ): DomainResult<Mission> {
   if (!validContext(context)) return failure("INVALID_INPUT", "Command context is invalid.");
   if (mission.version !== expectedVersion) return failure("VERSION_CONFLICT", "Mission changed; reload before retrying.");
-  if (context.actorId !== mission.requesterId) return failure("FORBIDDEN", "Only the requester can publish this mission.");
+  if (context.actorId !== mission.requesterId || context.actorRole !== "requester") return failure("FORBIDDEN", "Only the requesting account can publish this mission.");
   if (mission.status !== "quoted" || !mission.quote) return failure("MISSING_QUOTE", "A valid quote is required before publication.");
   if (Date.parse(mission.quote.expiresAt) <= Date.parse(context.occurredAt)) return failure("QUOTE_EXPIRED", "The quote has expired; request a fresh quote.");
   const next: Mission = { ...mission, status: "open", updatedAt: context.occurredAt, version: mission.version + 1 };
@@ -98,6 +98,7 @@ export function assignRunner(
 ): DomainResult<Mission> {
   if (!validContext(context)) return failure("INVALID_INPUT", "Command context is invalid.");
   if (mission.version !== expectedVersion) return failure("VERSION_CONFLICT", "Mission changed; reload before retrying.");
+  if (context.actorRole !== "dispatcher" && context.actorRole !== "system") return failure("FORBIDDEN", "Only dispatch operations can assign a Runner.");
   if (mission.status !== "open") return failure("INVALID_TRANSITION", "Only open missions can be assigned.");
   if (!isRunnerEligible(mission, runner)) return failure("INELIGIBLE_RUNNER", "Runner does not satisfy mission qualification or jurisdiction policy.");
   const next: Mission = { ...mission, status: "assigned", assignedRunnerId: runner.runnerId, updatedAt: context.occurredAt, version: mission.version + 1 };
@@ -110,9 +111,10 @@ export function transitionMission(
 ): DomainResult<Mission> {
   if (!validContext(context)) return failure("INVALID_INPUT", "Command context is invalid.");
   if (mission.version !== expectedVersion) return failure("VERSION_CONFLICT", "Mission changed; reload before retrying.");
-  const isRequesterCancellation = toStatus === "cancelled" && context.actorId === mission.requesterId;
-  const isAssignedRunner = Boolean(mission.assignedRunnerId && context.actorId === mission.assignedRunnerId);
-  if (!isRequesterCancellation && !isAssignedRunner) return failure("FORBIDDEN", "Actor is not authorized for this mission transition.");
+  const isRequesterCancellation = toStatus === "cancelled" && context.actorId === mission.requesterId && context.actorRole === "requester";
+  const isAssignedRunner = Boolean(mission.assignedRunnerId && context.actorId === mission.assignedRunnerId && context.actorRole === "runner");
+  const isTrustAction = context.actorRole === "trust_operator" && (toStatus === "safety_hold" || toStatus === "disputed" || toStatus === "closed");
+  if (!isRequesterCancellation && !isAssignedRunner && !isTrustAction) return failure("FORBIDDEN", "Actor is not authorized for this mission transition.");
   if (!canTransition(mission.status, toStatus)) return failure("INVALID_TRANSITION", `Transition ${mission.status} -> ${toStatus} is not allowed.`);
   const next: Mission = { ...mission, status: toStatus, updatedAt: context.occurredAt, version: mission.version + 1 };
   return { ok: true, value: next, events: [event(mission, context, toStatus === "cancelled" ? "mission.cancelled" : "mission.status_changed", toStatus, mission.status)] };
