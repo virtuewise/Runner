@@ -3,7 +3,8 @@ import type { Mission, MissionStatus, RunnerEligibility } from "./types";
 const TRANSITIONS: Readonly<Record<MissionStatus, readonly MissionStatus[]>> = {
   draft: ["quoted", "cancelled"],
   quoted: ["open", "cancelled", "expired"],
-  open: ["assigned", "cancelled", "expired", "safety_hold"],
+  open: ["matching", "assigned", "cancelled", "expired", "safety_hold"],
+  matching: ["assigned", "cancelled", "expired", "safety_hold"],
   assigned: ["runner_en_route", "cancelled", "failed", "safety_hold"],
   runner_en_route: ["at_pickup", "cancelled", "failed", "safety_hold"],
   at_pickup: ["in_custody", "cancelled", "failed", "safety_hold"],
@@ -16,6 +17,7 @@ const TRANSITIONS: Readonly<Record<MissionStatus, readonly MissionStatus[]>> = {
   failed: ["disputed", "closed"],
   disputed: ["closed", "safety_hold"],
   safety_hold: ["disputed", "failed", "closed"],
+  customs_hold: ["in_custody", "en_route_to_destination", "disputed", "safety_hold"],
 };
 
 export function canTransition(from: MissionStatus, to: MissionStatus): boolean {
