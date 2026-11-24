@@ -1,3 +1,5 @@
+import test from "node:test";
+import assert from "node:assert/strict";
 import { planRelay } from "../src/domain/mission/relay.ts";
 
 test("relay planner chooses a feasible multi-hop route and respects handover buffers", () => {
