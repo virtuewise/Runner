@@ -2,3 +2,5 @@ export * from "./types.ts";
 export * from "./policy.ts";
 export * from "./pricing.ts";
 export * from "./engine.ts";
+export * from "./persistence.ts";
+export * from "./relay.ts";
