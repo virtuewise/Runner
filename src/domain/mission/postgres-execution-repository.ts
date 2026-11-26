@@ -115,7 +115,7 @@ class PostgresExecutionTransaction implements ExecutionTransaction {
         and pending.expires_at>$4::timestamptz) as active_leg_count
       from public.runner_profiles rp join public.runner_availability_windows aw on aw.runner_id=rp.runner_id
       where rp.runner_id=$1 and aw.status='available' and aw.available_from <= $2 and aw.available_until >= $3
-      order by aw.available_from limit 1`,[runnerId,this.currentLeg.serviceWindowStart,this.currentLeg.serviceWindowEnd,this.currentNow]);
+      order by aw.available_from limit 1 for update of rp`,[runnerId,this.currentLeg.serviceWindowStart,this.currentLeg.serviceWindowEnd,this.currentNow]);
     const row=q.rows[0];if(!row)return null;
     return {runnerId:row.runner_id,identityVerified:row.identity_status==="verified",qualified:row.qualification_status==="qualified",
       active:row.is_active,capabilities:row.capabilities??[],approvedJurisdictions:row.jurisdictions??[],
