@@ -65,12 +65,12 @@ export async function expireDispatchOffers(input: {
 }
 
 export async function reassignDispatchLeg(input: {
-  repository: ExecutionRepository; legId: string; now: string; actorId: string; reason: string;
+  repository: ExecutionRepository; legId: string; now: string; actorId: string; actorRole: "dispatcher" | "trust_operator"; reason: string;
 }): Promise<{ offersRevoked: number; challengesInvalidated: number }> {
   if (!input.legId || !input.actorId || !input.reason.trim() || !Number.isFinite(Date.parse(input.now)))
     throw new Error("Invalid reassignment command");
   return input.repository.transaction(async (tx) => ({
-    offersRevoked: await tx.invalidateOffersForLeg({ legId: input.legId, now: input.now, reason: input.reason, actorId: input.actorId }),
-    challengesInvalidated: await tx.invalidateCustodyForLeg({ legId: input.legId, now: input.now, actorId: input.actorId }),
+    offersRevoked: await tx.invalidateOffersForLeg({ legId: input.legId, now: input.now, reason: input.reason, actorId: input.actorId, actorRole: input.actorRole }),
+    challengesInvalidated: await tx.invalidateCustodyForLeg({ legId: input.legId, now: input.now, actorId: input.actorId, actorRole: input.actorRole }),
   }));
 }
