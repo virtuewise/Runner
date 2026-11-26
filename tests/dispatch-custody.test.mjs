@@ -78,4 +78,5 @@ test("custody rejects expired challenges",async()=>{
   const expired=await confirmCustody({repository:f.repository,crypto:f.crypto,challengeId:"c3",actorId:"sender",
     token:issued.plaintextToken,now:"2026-11-26T10:01:00.000Z"});
   assert.deepEqual(expired,{ok:false,reason:"EXPIRED"});
+  assert.equal(f.records.get("c3").status,"expired");
 });
