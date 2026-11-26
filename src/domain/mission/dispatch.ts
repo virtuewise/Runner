@@ -38,8 +38,8 @@ function eligible(leg: DispatchLeg, runner: DispatchRunner, now: number): boolea
     leg.requiredCapabilities.every((capability) => runner.capabilities.includes(capability)) &&
     (!leg.requiredVehicleClass || leg.requiredVehicleClass === runner.vehicleClass) &&
     [leg.originCountry, leg.destinationCountry].every((country) => runner.approvedJurisdictions.includes(country)) &&
-    Date.parse(runner.availableFrom) <= now && Date.parse(runner.availableUntil) >= Date.parse(leg.serviceWindowEnd) &&
-    Date.parse(leg.serviceWindowStart) <= now;
+    Date.parse(runner.availableFrom) <= Date.parse(leg.serviceWindowStart) &&
+    Date.parse(runner.availableUntil) >= Date.parse(leg.serviceWindowEnd) && now <= Date.parse(leg.serviceWindowEnd);
 }
 
 /** Creates a time-limited offer, never an assignment. Acceptance is a separate authenticated command. */
@@ -53,7 +53,7 @@ export async function createDispatchOffer(input: {
       input.policy.offerTtlSeconds > 3600 || !Number.isSafeInteger(input.policy.maxCandidates) ||
       input.policy.maxCandidates < 1 || input.policy.maxCandidates > 100) throw new Error("Invalid dispatch command or policy");
   return input.repository.transaction(async (tx) => {
-    const leg = await tx.lockNextOpenLeg({ now: input.now, zone: input.policy.zone });
+    const leg = await tx.lockNextOpenLeg({ now: input.now, ...(input.policy.zone ? { zone: input.policy.zone } : {}) });
     if (!leg) return { ok: false, reason: "NO_OPEN_LEG" };
     const candidates = await tx.findCandidates(leg, input.policy.maxCandidates);
     for (const runnerId of candidates) {
