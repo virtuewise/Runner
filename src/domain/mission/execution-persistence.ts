@@ -6,8 +6,8 @@ export interface ExecutionTransaction extends DispatchTransaction, CustodyTransa
   acceptOffer(input:{offerId:string;runnerId:string;now:string;expectedVersion:number}):Promise<boolean>;
   declineOffer(input:{offerId:string;runnerId:string;now:string;expectedVersion:number}):Promise<boolean>;
   expireOffers(now:string,limit:number):Promise<readonly DispatchOffer[]>;
-  invalidateOffersForLeg(input:{legId:string;now:string;reason:string;actorId:string}):Promise<number>;
-  invalidateCustodyForLeg(input:{legId:string;now:string;actorId:string}):Promise<number>;
+  invalidateOffersForLeg(input:{legId:string;now:string;reason:string;actorId:string;actorRole:"dispatcher"|"trust_operator"}):Promise<number>;
+  invalidateCustodyForLeg(input:{legId:string;now:string;actorId:string;actorRole:"dispatcher"|"trust_operator"}):Promise<number>;
   recordOfferEvent(input:{offer:DispatchOffer;actorId:string;actorRole:"runner"|"dispatcher"|"system";
     eventType:string;reason:string;occurredAt:string;idempotencyKey:string}):Promise<void>;
 }
