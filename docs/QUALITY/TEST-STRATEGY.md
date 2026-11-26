@@ -15,3 +15,6 @@ Unauthorized access denied; no duplicate leg assignment under concurrency; retri
 GitHub Actions runs Node tests and TypeScript typecheck. It does not prove real PostgreSQL compatibility, Expo native builds, device behaviour, load capacity or production security.
 
 Track invariant and negative-path coverage, not line coverage alone.
+
+## Execution infrastructure verification
+The mission-engine CI job provisions ephemeral PostgreSQL, applies all mission/dispatch/execution migrations, and exercises concurrent leg claims, Runner capacity serialization, dispatcher idempotency, authenticated offer acceptance, custody row-lock/replay behavior, outbox publication/dead-letter handling and transaction rollback. Domain fake tests remain useful for fast policy checks; PostgreSQL integration tests are the authority for persistence/concurrency claims.
