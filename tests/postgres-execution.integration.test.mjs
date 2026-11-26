@@ -10,6 +10,11 @@ import { issueCustodyChallenge, confirmCustody, expireCustodyChallenges } from "
 import { productionCustodyCrypto } from "../src/domain/mission/production-custody-crypto.ts";
 import { createPostgresExecutionRepository, createPostgresDispatchRepository, createPostgresCustodyRepository, createPostgresOutboxStore } from "../src/domain/mission/postgres-execution-repository.ts";
 import { processOutboxBatch } from "../src/domain/mission/outbox-worker.ts";
+import { ingestRunnerLocation, setRunnerLocationSharing, updateRunnerAvailability } from "../src/domain/mission/network-operations.ts";
+import { createPostgresNetworkOperationsRepository } from "../src/domain/mission/postgres-network-operations.ts";
+import { createPostgresNetworkOperationsQueries } from "../src/domain/mission/network-operations-queries.ts";
+import { reportMissionIncident, transitionMissionIncident, placeMissionSafetyHold } from "../src/domain/mission/incident-management.ts";
+import { createPostgresIncidentRepository } from "../src/domain/mission/postgres-incident-repository.ts";
 
 const databaseUrl=process.env.DATABASE_URL;
 test("PostgreSQL execution integration: migrations, concurrent dispatch, offer lifecycle, custody and outbox",
@@ -18,7 +23,7 @@ test("PostgreSQL execution integration: migrations, concurrent dispatch, offer l
     const pool=new Pool({connectionString:databaseUrl,max:12});
     const root=resolve(dirname(fileURLToPath(import.meta.url)),"..");
     try {
-      for(const file of ["202611250001_mission_persistence.sql","202611260001_dispatch_custody.sql","202611260002_execution_infrastructure.sql"])
+      for(const file of ["202611250001_mission_persistence.sql","202611260001_dispatch_custody.sql","202611260002_execution_infrastructure.sql","202611260003_live_network_ingestion.sql","202611260004_incident_management.sql"])
         await pool.query(await readFile(resolve(root,"database/migrations",file),"utf8"));
 
       const requester=randomUUID(),dispatcher=randomUUID(),runner=randomUUID(),runnerTwo=randomUUID(),mission=randomUUID();
@@ -49,6 +54,30 @@ test("PostgreSQL execution integration: migrations, concurrent dispatch, offer l
         [id,mission,n,JSON.stringify({countryCode:"ZA"}),JSON.stringify({countryCode:"ZA"}),start.toISOString(),end.toISOString()]);
 
 
+      const network=createPostgresNetworkOperationsRepository(pool);
+      await setRunnerLocationSharing({repository:network,authenticatedRunnerId:runner,enabled:true,now:stamp});
+      assert.equal(await network.getLocationSharing(runner),true);
+      const location={latitude:-26.2041,longitude:28.0473,accuracyMetres:12,capturedAt:stamp,sequence:1};
+      const locationWrite=await ingestRunnerLocation({repository:network,authenticatedRunnerId:runner,location,now:stamp});
+      assert.deepEqual(locationWrite,{ok:true,value:{status:"recorded"}});
+      const staleLocation=await ingestRunnerLocation({repository:network,authenticatedRunnerId:runner,
+        location:{...location,latitude:-26.2,sequence:1},now:stamp});
+      assert.deepEqual(staleLocation,{ok:true,value:{status:"stale"}});
+      const storedLocation=await pool.query("select latitude,longitude,sequence from public.runner_location_snapshots where runner_id=$1",[runner]);
+      assert.equal(storedLocation.rows[0].latitude,-26.2041,"duplicate or out-of-order device sequences cannot overwrite latest location");
+      await setRunnerLocationSharing({repository:network,authenticatedRunnerId:runner,enabled:false,now:stamp});
+      assert.equal(await network.getLocationSharing(runner),false);
+      const withdrawnLocation=await pool.query("select runner_id from public.runner_location_snapshots where runner_id=$1",[runner]);
+      assert.equal(withdrawnLocation.rows.length,0,"withdrawing consent deletes the latest location snapshot");
+      const disabledWrite=await ingestRunnerLocation({repository:network,authenticatedRunnerId:runner,location:{...location,sequence:2},now:stamp});
+      assert.deepEqual(disabledWrite,{ok:true,value:{status:"sharing_disabled"}});
+      const availability=await updateRunnerAvailability({repository:network,authenticatedRunnerId:runnerTwo,
+        window:{availableFrom:start.toISOString(),availableUntil:end.toISOString(),status:"unavailable"},now:stamp});
+      assert.deepEqual(availability,{ok:true});
+      const availabilityRows=await pool.query("select status from public.runner_availability_windows where runner_id=$1 and status <> 'cancelled'",[runnerTwo]);
+      assert.deepEqual(availabilityRows.rows.map(row=>row.status),["unavailable"],
+        "Runner availability updates replace overlapping availability windows atomically");
+
       const execution=createPostgresExecutionRepository(pool);
       const dispatch=createPostgresDispatchRepository(pool);
       const custody=createPostgresCustodyRepository(pool);
@@ -60,6 +89,24 @@ test("PostgreSQL execution integration: migrations, concurrent dispatch, offer l
       assert.equal(attempts.filter(x=>x.ok).length,1,"capacity and row locks must prevent concurrent over-dispatch");
       assert.equal(attempts.filter(x=>!x.ok&&x.reason==="NO_ELIGIBLE_RUNNER").length,1);
       const winning=attempts.find(x=>x.ok).offer;
+      const readModels=createPostgresNetworkOperationsQueries(pool);
+      const inbox=await readModels.getRunnerOfferInbox({authenticatedRunnerId:runner,now:stamp});
+      assert.equal(inbox.length,1,"Runner inbox returns only the authenticated Runner's active offer");
+      assert.equal(inbox[0].offerId,winning.id);
+      const requesterTracking=await readModels.getMissionTracking({
+        principal:{actorId:requester,role:"requester"},missionId:mission,now:stamp,
+      });
+      assert.equal(requesterTracking.missionId,mission);
+      assert.equal(requesterTracking.legs.length,2);
+      const forbiddenTracking=await readModels.getMissionTracking({
+        principal:{actorId:runnerTwo,role:"runner"},missionId:mission,now:stamp,
+      });
+      assert.equal(forbiddenTracking,null,"a Runner not assigned to a mission cannot read its tracking view");
+      const dispatcherQueue=await readModels.getDispatcherQueue({
+        principal:{actorId:dispatcher,role:"dispatcher"},now:stamp,
+      });
+      assert.ok(dispatcherQueue.some(item=>item.activeOfferId===winning.id),
+        "dispatcher queue includes the live offer for its leg");
       const replay=await createDispatchOffer({...base,offerId:randomUUID(),eventId:randomUUID(),idempotencyKey:winning.idempotencyKey});
       assert.equal(replay.ok,true);
       assert.equal(replay.offer.id,winning.id,"same dispatcher idempotency key returns the original offer");
@@ -184,5 +231,39 @@ test("PostgreSQL execution integration: migrations, concurrent dispatch, offer l
       }),/force rollback/);
       const rollbackRow=await pool.query("select id from public.dispatch_offers where id=$1",[rollbackId]);
       assert.equal(rollbackRow.rows.length,0,"business writes must roll back together");
+
+      const incidents=createPostgresIncidentRepository(pool);
+      const incidentInput={repository:incidents,id:randomUUID(),missionId:mission,actor:{actorId:requester,role:"requester"},
+        idempotencyKey:"incident-report-001",category:"custody_dispute",severity:"high",
+        title:"Custody handover disputed",description:"The receiving party disputes the recorded handover.",
+        evidenceRefs:["evidence_ref_001"],now:stamp};
+      const incident=await reportMissionIncident(incidentInput);
+      assert.equal(incident.ok,true);
+      const incidentReplay=await reportMissionIncident({...incidentInput,id:randomUUID()});
+      assert.equal(incidentReplay.ok,true);
+      assert.equal(incidentReplay.replayed,true);
+      assert.equal(incidentReplay.incident.id,incident.incident.id,"incident reporting is idempotent for the authenticated reporter");
+      const triaged=await transitionMissionIncident({repository:incidents,incidentId:incident.incident.id,
+        actor:{actorId:dispatcher,role:"trust_operator"},expectedVersion:1,nextStatus:"triaged",
+        idempotencyKey:"incident-triage-001",assignedOperatorId:dispatcher,now:stamp});
+      assert.equal(triaged.ok,true);
+      const resolved=await transitionMissionIncident({repository:incidents,incidentId:incident.incident.id,
+        actor:{actorId:dispatcher,role:"trust_operator"},expectedVersion:2,nextStatus:"resolved",
+        idempotencyKey:"incident-resolve-001",resolutionCode:"handover_verified",
+        resolutionNote:"Custody evidence reviewed and parties contacted.",now:stamp});
+      assert.equal(resolved.ok,true);
+      assert.equal(resolved.incident.status,"resolved");
+      const incidentEvents=await pool.query("select sequence,event_type from public.mission_incident_events where incident_id=$1 order by sequence",[incident.incident.id]);
+      assert.deepEqual(incidentEvents.rows.map(row=>row.event_type),["incident.reported","incident.triaged","incident.resolved"]);
+      const safetyHold=await placeMissionSafetyHold({repository:incidents,missionId:mission,
+        actor:{actorId:dispatcher,role:"trust_operator"},reason:"Active safety review required",
+        idempotencyKey:"safety-hold-001",now:stamp});
+      assert.deepEqual(safetyHold,{ok:true});
+      const safetyHoldReplay=await placeMissionSafetyHold({repository:incidents,missionId:mission,
+        actor:{actorId:dispatcher,role:"trust_operator"},reason:"Active safety review required",
+        idempotencyKey:"safety-hold-001",now:stamp});
+      assert.deepEqual(safetyHoldReplay,{ok:true,replayed:true});
+      const heldMission=await pool.query("select status from public.missions where id=$1",[mission]);
+      assert.equal(heldMission.rows[0].status,"safety_hold");
     } finally { await pool.end(); }
   });

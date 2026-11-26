@@ -94,6 +94,8 @@ Start with a modular monolith and explicit domain boundaries. Extract services o
 
 Implemented in repository: Expo client foundation; mission domain engine; pricing and relay candidate planner; PostgreSQL schema/repository adapter; initial Fetch-based mission API; automated domain/API tests.
 
-Not implemented or deployed: production HTTP adapter, live identity provider, screening/routing integrations, dispatch workers, custody challenge issuance, payments, live location, realtime updates, cloud topology, observability deployment and native release builds.
+Implemented but not deployed: consent-gated Runner latest-location ingestion and transactional availability-window updates (migration 202611260003); domain validation and PostgreSQL adapter are covered by automated tests.
+
+Not implemented or deployed: production HTTP adapter, live identity provider, authenticated consent UI/endpoints, location expiry worker, screening/routing integrations, dispatch workers, custody challenge issuance, payments, realtime updates, cloud topology, observability deployment and native release builds.
 
 See [ADR index](adr/README.md), [data model](DATA-MODEL.md), [security plan](SECURITY-PRIVACY.md) and [go-live checklist](GO-LIVE.md).

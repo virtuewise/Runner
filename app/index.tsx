@@ -19,7 +19,7 @@ export default function HomeScreen() {
       <ScrollView contentContainerStyle={s.page} showsVerticalScrollIndicator={false}>
         <View style={[s.topbar, wide && s.topbarWide]}>
           <View style={s.wordmark}><View style={s.mark}><View style={s.markCut} /></View><Text style={s.logo}>RUNNER<Text style={s.orange}>.</Text></Text></View>
-          <View style={s.topRight}><View style={s.status}><View style={s.liveDot}/><Text style={s.statusText}>NETWORK ONLINE</Text></View><Pressable accessibilityRole="button" accessibilityLabel="Open profile" style={s.avatar}><Text style={s.avatarText}>R</Text></Pressable></View>
+          <View style={s.topRight}><View style={s.status}><View style={s.liveDot}/><Text style={s.statusText}>NETWORK PREVIEW</Text></View><Pressable accessibilityRole="button" accessibilityLabel="Open profile" style={s.avatar}><Text style={s.avatarText}>R</Text></Pressable></View>
         </View>
         <View style={[s.hero, wide && s.heroWide]}>
           <View style={s.heroCopy}>
@@ -32,12 +32,12 @@ export default function HomeScreen() {
             </View>
           </View>
           <View style={s.heroPanel}>
-            <View style={s.panelTop}><Text style={s.panelLabel}>RUNNER NETWORK / 001</Text><Text style={s.panelLive}>● LIVE</Text></View>
+            <View style={s.panelTop}><Text style={s.panelLabel}>RUNNER NETWORK / 001</Text><Text style={s.panelLive}>● DEMO</Text></View>
             <View style={s.routeVisual}><View style={s.routeLine}/><View style={[s.routePoint,s.routeStart]}><View style={s.routeCore}/></View><View style={[s.routePoint,s.routeEnd]}><View style={s.routeCore}/></View><View style={s.routeTag}><Text style={s.routeTagText}>YOUR CITY. YOUR MOVE.</Text></View></View>
             <View style={s.panelBottom}><View><Text style={s.metricValue}>24/7</Text><Text style={s.metricLabel}>READY WHEN YOU ARE</Text></View><View style={s.metricDivider}/><View><Text style={s.metricValue}>01 → ∞</Text><Text style={s.metricLabel}>EVERY MISSION COUNTS</Text></View></View>
           </View>
         </View>
-        <View style={s.sectionHeader}><View><Text style={s.eyebrow}>THE OPEN NETWORK</Text><Text style={s.sectionTitle}>{mode === "discover" ? "MISSIONS IN MOTION" : "START A MISSION"}</Text></View><Text style={s.sectionMeta}>JOHANNESBURG / ZA</Text></View>
+        <View style={s.sectionHeader}><View><Text style={s.eyebrow}>THE OPEN NETWORK</Text><Text style={s.sectionTitle}>{mode === "discover" ? "MISSIONS IN MOTION" : "START A MISSION"}</Text></View><Text style={s.sectionMeta}>DEMO DATA / JOHANNESBURG</Text></View>
         {mode === "discover" ? <View style={[s.missionGrid, wide && s.missionGridWide]}>{missions.map(m => (
           <Pressable key={m.id} accessibilityRole="button" accessibilityState={{ selected: selected === m.id }} onPress={() => setSelected(selected === m.id ? null : m.id)} style={[s.missionCard, selected === m.id && s.missionCardSelected]}>
             <View style={s.cardTop}><Text style={s.cardType}>{m.type}</Text><Text style={[s.urgency, m.urgency === "PRIORITY" && s.urgencyPriority]}>{m.urgency}</Text></View>
