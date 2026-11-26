@@ -81,6 +81,15 @@ test("PostgreSQL execution integration: migrations, concurrent dispatch, offer l
       assert.equal(invalidRow.rows[0].status,"rejected");
       assert.ok(invalidRow.rows[0].invalidated_at);
 
+      const duplicateKey="same-concurrent-command";
+      const duplicateAttempts=await Promise.all([
+        createDispatchOffer({...base,offerId:randomUUID(),eventId:randomUUID(),idempotencyKey:duplicateKey}),
+        createDispatchOffer({...base,offerId:randomUUID(),eventId:randomUUID(),idempotencyKey:duplicateKey}),
+      ]);
+      assert.equal(duplicateAttempts.filter(x=>x.ok).length,2);
+      assert.equal(duplicateAttempts[0].offer.id,duplicateAttempts[1].offer.id,
+        "parallel retries with one idempotency key must resolve to one persisted offer");
+
       const challenge=await issueCustodyChallenge({repository:custody,crypto:productionCustodyCrypto,
         challengeId:randomUUID(),missionId:mission,legId:winning.legId,releasingActorId:runner,
         receivingActorId:requester,purpose:"final_delivery",now:stamp,ttlSeconds:120});
