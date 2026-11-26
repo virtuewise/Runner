@@ -1,12 +1,15 @@
 import { acceptDispatchOffer, declineDispatchOffer } from "../domain/mission/dispatch-lifecycle.ts";
+import { updateRunnerAvailability } from "../domain/mission/network-operations.ts";
+import type { NetworkOperationsRepository, RunnerAvailabilityInput } from "../domain/mission/network-operations.ts";
 import type { ExecutionRepository } from "../domain/mission/execution-persistence.ts";
 import type { OperationsPrincipal, PostgresNetworkOperationsQueries } from "../domain/mission/network-operations-queries.ts";
 
 export interface NetworkOperationsHandlerDependencies {
   readonly authenticate: (request: Request) => Promise<OperationsPrincipal | null>;
   readonly executionRepository: ExecutionRepository;
+  readonly availabilityRepository: NetworkOperationsRepository;
   readonly queries: Pick<PostgresNetworkOperationsQueries,
-    "getRunnerOfferInbox" | "getMissionTracking" | "getDispatcherQueue">;
+    "getRunnerAvailability" | "getRunnerOfferInbox" | "getMissionTracking" | "getDispatcherQueue">;
   readonly now: () => string;
 }
 const json = (body: unknown, status = 200): Response =>
@@ -18,6 +21,32 @@ const invalidRequest = () => json({ error: "INVALID_REQUEST" }, 400);
 
 export function createNetworkOperationsHandlers(deps: NetworkOperationsHandlerDependencies) {
   return {
+    async runnerAvailability(request: Request): Promise<Response> {
+      const principal = await deps.authenticate(request);
+      if (!principal) return unauthenticated();
+      if (principal.role !== "runner") return forbidden();
+      if (request.method === "GET") {
+        const windows = await deps.queries.getRunnerAvailability({
+          authenticatedRunnerId: principal.actorId, now: deps.now(),
+        });
+        return json({ windows });
+      }
+      if (request.method !== "POST") return methodNotAllowed();
+      let body: unknown;
+      try { body = await request.json(); } catch { return invalidRequest(); }
+      if (!body || typeof body !== "object" || Array.isArray(body)) return invalidRequest();
+      const input = body as Record<string, unknown>;
+      if (typeof input.availableFrom !== "string" || typeof input.availableUntil !== "string" ||
+          (input.status !== "available" && input.status !== "unavailable")) return invalidRequest();
+      const result = await updateRunnerAvailability({
+        repository: deps.availabilityRepository,
+        authenticatedRunnerId: principal.actorId,
+        window: input as unknown as RunnerAvailabilityInput,
+        now: deps.now(),
+      });
+      return result.ok ? json({ updated: true }) : invalidRequest();
+    },
+
     async runnerOffers(request: Request): Promise<Response> {
       if (request.method !== "GET") return methodNotAllowed();
       const principal = await deps.authenticate(request);
