@@ -109,7 +109,6 @@ test("mission API replays an identical idempotent create request", async () => {
 });
 
 test("mission API refuses manifests rejected by server-side screening", async () => {
-  const { api: unused, ...fixtureState } = fixture();
   const repository = { unitOfWork: { run: async () => { throw new Error("screening must stop before persistence"); } } };
   const api = createMissionApi({
     repository,
@@ -121,4 +120,29 @@ test("mission API refuses manifests rejected by server-side screening", async ()
   });
   const response = await api(post("/v1/missions", { terms: validTerms }));
   assert.equal(response.status, 422);
+});
+
+test("mission API prices and publishes with optimistic version checks", async () => {
+  const { api } = fixture();
+  const created = await api(post("/v1/missions", { terms: validTerms }));
+  const createdBody = await created.json();
+  const missionId = createdBody.data.id;
+  const quote = await api(post(`/v1/missions/${missionId}/quote`, {}, "mission-quote-key-0001", { "if-match": '"1"' }));
+  const quoteBody = await quote.json();
+  assert.equal(quote.status, 200);
+  assert.equal(quoteBody.data.status, "quoted");
+  assert.equal(quoteBody.data.quote.requesterTotal.currency, "ZAR");
+  const published = await api(post(`/v1/missions/${missionId}/publish`, {}, "mission-publish-key-01", { "if-match": '"2"' }));
+  const publishedBody = await published.json();
+  assert.equal(published.status, 200);
+  assert.equal(publishedBody.data.status, "open");
+  assert.equal(publishedBody.data.version, 3);
+});
+
+test("mission API rejects stale mission versions", async () => {
+  const { api } = fixture();
+  const created = await api(post("/v1/missions", { terms: validTerms }));
+  const missionId = (await created.json()).data.id;
+  const quote = await api(post(`/v1/missions/${missionId}/quote`, {}, "mission-quote-key-0002", { "if-match": '"0"' }));
+  assert.equal(quote.status, 409);
 });
