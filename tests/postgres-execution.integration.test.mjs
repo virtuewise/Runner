@@ -94,6 +94,11 @@ test("PostgreSQL execution integration: migrations, concurrent dispatch, offer l
       const duplicateAccepted=await acceptDispatchOffer({repository:execution,offerId:duplicateOffer.id,
         authenticatedRunnerId:runner,now:stamp});
       assert.equal(duplicateAccepted.ok,true);
+      const reassignmentReplay=await reassignDispatchLeg({repository:execution,legId:winning.legId,now:stamp,
+        actorId:dispatcher,actorRole:"dispatcher",reason:"operational reassignment test",idempotencyKey:"reassign-001"});
+      assert.deepEqual(reassignmentReplay,{offersRevoked:0,challengesInvalidated:0});
+      const stillAccepted=await pool.query("select status from public.dispatch_offers where id=$1",[duplicateOffer.id]);
+      assert.equal(stillAccepted.rows[0].status,"accepted","replayed reassignment must not revoke later work");
 
       const challenge=await issueCustodyChallenge({repository:custody,crypto:productionCustodyCrypto,
         challengeId:randomUUID(),missionId:mission,legId:winning.legId,releasingActorId:runner,
