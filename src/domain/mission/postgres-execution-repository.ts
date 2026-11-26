@@ -6,7 +6,7 @@ import type { CustodyRepository } from "./custody.ts";
 import type { OutboxMessage, OutboxStore } from "./outbox-worker.ts";
 
 interface QueryResult<Row> { readonly rows: readonly Row[]; readonly rowCount: number | null; }
-interface PgQueryable { query<Row = Record<string, unknown>>(sql: string, values?: readonly unknown[]): Promise<QueryResult<Row>>; }
+interface PgQueryable { query<Row = Record<string, unknown>>(sql: string, values?: any[]): Promise<QueryResult<Row>>; }
 interface PgClient extends PgQueryable { release(): void; }
 export interface ExecutionPgPool extends PgQueryable { connect(): Promise<PgClient>; }
 interface LegRow {
