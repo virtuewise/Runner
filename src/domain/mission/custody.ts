@@ -1,5 +1,5 @@
 export interface CustodyChallenge {
-  readonly id: string; readonly missionId: string; readonly legId: string;
+  readonly id: string; readonly missionId: string; readonly legId: string; readonly receivingLegId?: string;
   readonly releasingActorId: string; readonly receivingActorId: string;
   readonly purpose: "pickup" | "relay_handover" | "final_delivery"; readonly tokenHash: string;
   readonly expiresAt: string; readonly status: "pending" | "confirmed" | "expired" | "invalidated" | "disputed";
@@ -26,12 +26,14 @@ export type CustodyResult = { readonly ok: true; readonly challenge: CustodyChal
 
 export async function issueCustodyChallenge(input: {
   readonly repository: CustodyRepository; readonly crypto: CustodyCrypto; readonly challengeId: string;
-  readonly missionId: string; readonly legId: string; readonly releasingActorId: string; readonly receivingActorId: string;
+  readonly missionId: string; readonly legId: string; readonly receivingLegId?: string; readonly releasingActorId: string; readonly receivingActorId: string;
   readonly purpose: CustodyChallenge["purpose"]; readonly now: string; readonly ttlSeconds: number;
 }): Promise<CustodyResult> {
   const now = Date.parse(input.now);
   if (!Number.isFinite(now) || !input.challengeId || !input.missionId || !input.legId ||
       !input.releasingActorId || !input.receivingActorId || input.releasingActorId === input.receivingActorId ||
+      (input.purpose === "relay_handover" && !input.receivingLegId) ||
+      (input.receivingLegId && input.receivingLegId === input.legId) ||
       !Number.isSafeInteger(input.ttlSeconds) || input.ttlSeconds < 30 || input.ttlSeconds > 900)
     throw new Error("Invalid custody challenge request");
   const plaintextToken = input.crypto.randomToken(32);
@@ -39,7 +41,8 @@ export async function issueCustodyChallenge(input: {
   const tokenHash = await input.crypto.hashToken(plaintextToken);
   if (!/^[a-f0-9]{64,}$/i.test(tokenHash)) throw new Error("Custody token digest is invalid");
   const challenge: CustodyChallenge = { id: input.challengeId, missionId: input.missionId, legId: input.legId,
-    releasingActorId: input.releasingActorId, receivingActorId: input.receivingActorId, purpose: input.purpose,
+    releasingActorId: input.releasingActorId, receivingActorId: input.receivingActorId,
+    ...(input.receivingLegId ? { receivingLegId: input.receivingLegId } : {}), purpose: input.purpose,
     tokenHash, expiresAt: new Date(now + input.ttlSeconds * 1000).toISOString(), status: "pending", version: 1 };
   await input.repository.transaction(async (tx) => {
     await tx.createChallenge(challenge);
