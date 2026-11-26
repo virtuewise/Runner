@@ -154,6 +154,20 @@ paths:
         '401': { $ref: '#/components/responses/ApiError' }
         '403': { $ref: '#/components/responses/ApiError' }
         '400': { $ref: '#/components/responses/ApiError' }
+  /v1/operations/incidents:
+    get:
+      summary: Read the prioritized incident and dispute queue
+      description: Trust-operator only. Critical and high severity cases are prioritized; evidence is returned as opaque references only.
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 250, default: 100 }
+      responses:
+        '200': { description: Open, triaged and investigating incidents }
+        '401': { $ref: '#/components/responses/ApiError' }
+        '403': { $ref: '#/components/responses/ApiError' }
+        '400': { $ref: '#/components/responses/ApiError' }
   /v1/incidents:
     post:
       summary: Report an operational incident or dispute
