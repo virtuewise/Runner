@@ -154,6 +154,67 @@ paths:
         '401': { $ref: '#/components/responses/ApiError' }
         '403': { $ref: '#/components/responses/ApiError' }
         '400': { $ref: '#/components/responses/ApiError' }
+  /v1/incidents:
+    post:
+      summary: Report an operational incident or dispute
+      description: Requesters and assigned Runners may report against their mission; dispatcher and trust-operator roles are server-authorized. Evidence references are opaque identifiers, not raw media or personal data.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 128 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IncidentReport'
+      responses:
+        '200': { description: Incident created or idempotently replayed }
+        '400': { $ref: '#/components/responses/ApiError' }
+        '401': { $ref: '#/components/responses/ApiError' }
+        '403': { $ref: '#/components/responses/ApiError' }
+  /v1/incidents/{incidentId}/transition:
+    post:
+      summary: Transition an incident as a trust operator
+      parameters:
+        - name: incidentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IncidentTransition'
+      responses:
+        '200': { description: Incident transition committed }
+        '403': { $ref: '#/components/responses/ApiError' }
+        '404': { $ref: '#/components/responses/ApiError' }
+        '409': { $ref: '#/components/responses/ApiError' }
+  /v1/missions/{missionId}/safety-hold:
+    post:
+      summary: Place an audited mission safety hold
+      description: Trust-operator only. Terminal missions cannot be placed on hold. Repeated commands are idempotent.
+      parameters:
+        - $ref: '#/components/parameters/MissionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [reason, idempotencyKey]
+              properties:
+                reason: { type: string, minLength: 3, maxLength: 500 }
+                idempotencyKey: { type: string, minLength: 1, maxLength: 128 }
+      responses:
+        '200': { description: Safety hold placed or replayed }
+        '403': { $ref: '#/components/responses/ApiError' }
+        '404': { $ref: '#/components/responses/ApiError' }
+        '409': { $ref: '#/components/responses/ApiError' }
 components:
   securitySchemes:
     bearerAuth:
@@ -207,6 +268,65 @@ components:
         requiredVehicleClass:
           type: string
           enum: [foot, bicycle, motorcycle, car, van]
+    IncidentReport:
+      type: object
+      additionalProperties: false
+      required: [missionId, idempotencyKey, category, severity, title, description]
+      properties:
+        missionId: { type: string, format: uuid }
+        legId: { type: string, format: uuid }
+        idempotencyKey: { type: string, minLength: 1, maxLength: 128 }
+        category: { type: string, enum: [safety, loss, damage, delay, custody_dispute, suspected_fraud, customs, other] }
+        severity: { type: string, enum: [low, medium, high, critical] }
+        title: { type: string, minLength: 3, maxLength: 120 }
+        description: { type: string, minLength: 3, maxLength: 4000 }
+        evidenceRefs:
+          type: array
+          maxItems: 20
+          items: { type: string, minLength: 1, maxLength: 128, pattern: '^[^\\s]+      type: object
+      additionalProperties: false
+      required: [availableFrom, availableUntil, status]
+      properties:
+        availableFrom: { type: string, format: date-time }
+        availableUntil: { type: string, format: date-time }
+        status: { type: string, enum: [available, unavailable] }
+    RunnerOfferDecision:
+      type: object
+      additionalProperties: false
+      required: [offerId, decision]
+      properties:
+        offerId: { type: string, format: uuid }
+        decision: { type: string, enum: [accept, decline] }
+    ApiError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, requestId]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            requestId: { type: string }
+  responses:
+    ApiError:
+      description: Structured API error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+ }
+    IncidentTransition:
+      type: object
+      additionalProperties: false
+      required: [expectedVersion, nextStatus, idempotencyKey]
+      properties:
+        expectedVersion: { type: integer, minimum: 1 }
+        nextStatus: { type: string, enum: [triaged, investigating, resolved, dismissed] }
+        idempotencyKey: { type: string, minLength: 1, maxLength: 128 }
+        assignedOperatorId: { type: string, format: uuid }
+        resolutionCode: { type: string, minLength: 2, maxLength: 80 }
+        resolutionNote: { type: string, minLength: 3, maxLength: 1000 }
     RunnerAvailabilityInput:
       type: object
       additionalProperties: false
