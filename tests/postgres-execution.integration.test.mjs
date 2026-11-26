@@ -100,8 +100,9 @@ test("PostgreSQL execution integration: migrations, concurrent dispatch, offer l
 
       const outbox=createPostgresOutboxStore(pool);
       const sent=[];
+      const deliveryNow=new Date(Date.now()+1000).toISOString();
       const batch=await processOutboxBatch({store:outbox,publisher:{async publish(message){sent.push(message.id);}},
-        policy:{batchSize:50,leaseSeconds:30,maxAttempts:3,baseBackoffSeconds:2,maxBackoffSeconds:60},now:stamp});
+        policy:{batchSize:50,leaseSeconds:30,maxAttempts:3,baseBackoffSeconds:2,maxBackoffSeconds:60},now:deliveryNow});
       assert.ok(batch.published>=1);
       assert.ok(sent.length>=1);
       const deadId=randomUUID();
@@ -109,7 +110,7 @@ test("PostgreSQL execution integration: migrations, concurrent dispatch, offer l
         values($1,$2,'test.deadletter',$3::jsonb)`,[deadId,mission,JSON.stringify({test:true})]);
       const dead=await processOutboxBatch({store:outbox,publisher:{async publish(){throw new Error("provider unavailable");}},
         policy:{batchSize:10,leaseSeconds:30,maxAttempts:1,baseBackoffSeconds:1,maxBackoffSeconds:10},
-        now:new Date(Date.now()+1000).toISOString()});
+        now:new Date(Date.now()+2000).toISOString()});
       assert.equal(dead.deadLettered,1);
       const deadRow=await pool.query("select dead_lettered_at from public.transactional_outbox where id=$1",[deadId]);
       assert.ok(deadRow.rows[0].dead_lettered_at);
