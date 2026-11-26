@@ -79,3 +79,16 @@ test("Runner availability query is scoped to authenticated identity and excludes
   assert.ok(sql.includes("available_until>$2"));
   assert.equal(windows[0].status,"available");
 });
+
+test("incident queue is trust-operator only and prioritizes highest severity",async()=>{
+  let sql,values;
+  const queries=createPostgresNetworkOperationsQueries({async query(q,args){sql=q;values=args;return {rows:[{
+    incident_id:"incident",mission_id:"mission",leg_id:null,category:"safety",severity:"critical",status:"open",
+    title:"Immediate risk",description:"Risk requires review.",reporter_role:"runner",created_at:"2026-11-26T12:00:00Z",
+    updated_at:"2026-11-26T12:00:00Z",version:1,assigned_operator_id:null,evidence_refs:["ref_001"],
+  }]};}});
+  await assert.rejects(()=>queries.getIncidentQueue({principal:{actorId:"dispatcher",role:"dispatcher"},now:"2026-11-26T12:00:00Z"}),/Trust operator role required/);
+  const items=await queries.getIncidentQueue({principal:{actorId:"trust",role:"trust_operator"},now:"2026-11-26T12:00:00Z",limit:10});
+  assert.ok(sql.includes("when 'critical' then 0"));
+  assert.equal(values[0],10);assert.equal(items[0].severity,"critical");
+});
