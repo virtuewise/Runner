@@ -3,7 +3,8 @@ interface QueryResult<Row> { readonly rows: readonly Row[]; readonly rowCount: n
 interface PgClient { query<Row = Record<string, unknown>>(sql: string, values?: unknown[]): Promise<QueryResult<Row>>; release(): void; }
 export interface NetworkOperationsPgPool { connect(): Promise<PgClient>; }
 export class PostgresNetworkOperationsRepository implements NetworkOperationsRepository {
-  constructor(private readonly pool: NetworkOperationsPgPool) {}
+  private readonly pool: NetworkOperationsPgPool;
+  constructor(pool: NetworkOperationsPgPool) { this.pool = pool; }
   async recordLocation(input: { runnerId: string; location: RunnerLocationInput; receivedAt: string; expiresAt: string }): Promise<"recorded" | "stale" | "sharing_disabled"> {
     const client = await this.pool.connect();
     try {
