@@ -144,6 +144,16 @@ test("PostgreSQL execution integration: migrations, concurrent dispatch, offer l
       const deadRow=await pool.query("select dead_lettered_at from public.transactional_outbox where id=$1",[deadId]);
       assert.ok(deadRow.rows[0].dead_lettered_at);
 
+      const crashId=randomUUID();
+      await pool.query(`insert into public.transactional_outbox(id,aggregate_id,event_type,payload)
+        values($1,$2,'test.worker_crash',$3::jsonb)`,[crashId,mission,JSON.stringify({test:"lease recovery"})]);
+      const firstLease=await outbox.claimBatch({now:deliveryNow,limit:1,leaseSeconds:5});
+      assert.equal(firstLease[0].id,crashId);
+      const recoveredLease=await outbox.claimBatch({now:new Date(Date.parse(deliveryNow)+6000).toISOString(),limit:1,leaseSeconds:5});
+      assert.equal(recoveredLease[0].id,crashId,"expired worker lease must make an unacknowledged message claimable");
+      assert.equal(recoveredLease[0].attempts,2);
+      await outbox.markPublished({id:crashId,publishedAt:new Date(Date.parse(deliveryNow)+6000).toISOString()});
+
       const rollbackId=randomUUID();
       await assert.rejects(execution.transaction(async tx=>{
         await tx.createOffer({id:rollbackId,missionId:mission,legId:legTwo,runnerId:runner,status:"offered",
