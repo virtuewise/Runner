@@ -73,7 +73,7 @@ test("PostgreSQL execution integration: migrations, concurrent dispatch, offer l
         receivingActorId:requester,purpose:"final_delivery",now:stamp,ttlSeconds:120});
       assert.equal(invalidatedChallenge.ok,true);
       const reassignment=await reassignDispatchLeg({repository:execution,legId:winning.legId,now:stamp,
-        actorId:dispatcher,actorRole:"dispatcher",reason:"operational reassignment test"});
+        actorId:dispatcher,actorRole:"dispatcher",reason:"operational reassignment test",idempotencyKey:"reassign-001"});
       assert.equal(reassignment.offersRevoked,1);
       assert.equal(reassignment.challengesInvalidated,1);
       const invalidRow=await pool.query("select status,invalidated_at from public.custody_handovers where challenge_id=$1",
