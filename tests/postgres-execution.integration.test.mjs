@@ -47,7 +47,7 @@ test("PostgreSQL execution integration: migrations, concurrent dispatch, offer l
         (id,mission_id,leg_number,mode,status,origin,destination,jurisdiction_codes,service_window_start,service_window_end)
         values($1,$2,$3,'car','open',$4::jsonb,$5::jsonb,array['ZA'],$6,$7)`,
         [id,mission,n,JSON.stringify({countryCode:"ZA"}),JSON.stringify({countryCode:"ZA"}),start.toISOString(),end.toISOString()]);
-      await pool.query("update public.mission_legs set status='assigned',assigned_runner_id=$1 where id=$2",[runnerTwo,legTwo]);
+
 
       const execution=createPostgresExecutionRepository(pool);
       const dispatch=createPostgresDispatchRepository(pool);
@@ -107,6 +107,7 @@ test("PostgreSQL execution integration: migrations, concurrent dispatch, offer l
       const stillAccepted=await pool.query("select status from public.dispatch_offers where id=$1",[duplicateOffer.id]);
       assert.equal(stillAccepted.rows[0].status,"accepted","replayed reassignment must not revoke later work");
 
+      await pool.query("update public.mission_legs set status='assigned',assigned_runner_id=$1 where id=$2",[runnerTwo,legTwo]);
       const relayChallenge=await issueCustodyChallenge({repository:custody,crypto:productionCustodyCrypto,
         challengeId:randomUUID(),missionId:mission,legId:legOne,receivingLegId:legTwo,releasingActorId:runner,
         receivingActorId:runnerTwo,purpose:"relay_handover",now:stamp,ttlSeconds:120});
