@@ -1,0 +1,32 @@
+name: Mission Engine
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  domain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up supported Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Install dependencies and run domain validation
+        shell: bash
+        run: |
+          if [[ ! -f package.json ]]; then
+            echo "Mission Engine package manifest is not present on this ref yet; domain validation will activate when the application foundation is integrated."
+            exit 0
+          fi
+          npm install --no-audit --no-fund
+          npm test
+          if [[ -f tsconfig.json ]]; then
+            npm run typecheck --if-present
+          fi
