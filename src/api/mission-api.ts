@@ -96,11 +96,12 @@ function domainFault(result: { readonly error: { readonly code: string; readonly
   return new ApiFault(status, result.error.code, result.error.message);
 }
 function versionHeader(request: Request): number | null {
-  const value = request.headers.get("if-match");
-  if (!value) return null;
-  const match = /^(?:W\\/)?"?([0-9]+)"?$/.exec(value.trim());
-  if (!match?.[1]) return null;
-  const parsed = Number(match[1]);
+  const header = request.headers.get("if-match");
+  if (!header) return null;
+  const value = header.trim().startsWith("W/") ? header.trim().slice(2) : header.trim();
+  const unquoted = value.startsWith('"') && value.endsWith('"') ? value.slice(1, -1) : value;
+  if (!/^[0-9]+$/.test(unquoted)) return null;
+  const parsed = Number(unquoted);
   return Number.isSafeInteger(parsed) ? parsed : null;
 }
 function idempotencyKey(request: Request): string | null {
