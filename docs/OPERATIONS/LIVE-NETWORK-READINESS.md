@@ -33,7 +33,8 @@ Status: engineering foundation only; not production-ready.
 ## Still required before live use
 
 - Production authentication and resource authorization; the API must supply the verified Runner principal.
-- Authenticated consent enable/withdraw endpoint and consent notice/purpose review.
+- Runner-controlled authenticated active-mission location consent read/enable/withdraw endpoint; withdrawal deletes the stored latest snapshot.
+- Consent notice, purpose review and privacy/legal approval.
 - Scheduled deletion/expiry worker and privacy retention policy.
 - Location spoofing/plausibility controls, device attestation assessment and abuse monitoring.
 - Rate limits, payload limits, telemetry minimization and security review.
