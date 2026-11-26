@@ -66,10 +66,10 @@ test("PostgreSQL execution integration: migrations, concurrent dispatch, offer l
       assert.equal(withdrawnLocation.rows.length,0,"withdrawing consent deletes the latest location snapshot");
       const disabledWrite=await ingestRunnerLocation({repository:network,authenticatedRunnerId:runner,location:{...location,sequence:2},now:stamp});
       assert.deepEqual(disabledWrite,{ok:true,value:{status:"sharing_disabled"}});
-      const availability=await updateRunnerAvailability({repository:network,authenticatedRunnerId:runner,
+      const availability=await updateRunnerAvailability({repository:network,authenticatedRunnerId:runnerTwo,
         window:{availableFrom:start.toISOString(),availableUntil:end.toISOString(),status:"unavailable"},now:stamp});
       assert.deepEqual(availability,{ok:true});
-      const availabilityRows=await pool.query("select status from public.runner_availability_windows where runner_id=$1 and status <> 'cancelled'",[runner]);
+      const availabilityRows=await pool.query("select status from public.runner_availability_windows where runner_id=$1 and status <> 'cancelled'",[runnerTwo]);
       assert.deepEqual(availabilityRows.rows.map(row=>row.status),["unavailable"],
         "Runner availability updates replace overlapping availability windows atomically");
 
