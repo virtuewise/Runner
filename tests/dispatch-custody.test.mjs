@@ -37,6 +37,7 @@ function custodyFixture(){
   const repository={async transaction(work){return work({
     async createChallenge(c){records.set(c.id,c);},async loadChallengeForUpdate(id){return records.get(id)??null;},
     async saveChallenge(c,expected){const old=records.get(c.id);if(!old||old.version!==expected)return false;records.set(c.id,c);return true;},
+    async expireChallenges(){return [];},
     async appendCustodyEvent(e){events.push(e);}
   });}};
   let seq=0;
