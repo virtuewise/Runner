@@ -102,6 +102,7 @@ class PostgresExecutionTransaction implements ExecutionTransaction {
   }
   async loadRunner(runnerId:string):Promise<DispatchRunner|null>{
     if(!this.currentLeg)return null;
+    await this.client.query("select runner_id from public.runner_profiles where runner_id=$1 for update",[runnerId]);
     const q=await this.client.query<RunnerRow>(`select rp.runner_id,rp.identity_status,rp.qualification_status,rp.is_active,
       rp.vehicle_class,rp.max_active_legs as capacity,
       coalesce((select array_agg(rc.capability_code) from public.runner_capabilities rc where rc.runner_id=rp.runner_id
@@ -144,6 +145,7 @@ class PostgresExecutionTransaction implements ExecutionTransaction {
     return q.rows[0]?offerFromRow(q.rows[0]):null;
   }
   async acceptOffer(input:{offerId:string;runnerId:string;now:string;expectedVersion:number}):Promise<boolean>{
+    await this.client.query("select runner_id from public.runner_profiles where runner_id=$1 for update",[input.runnerId]);
     const eligible=await this.client.query<{runner_id:string}>(`select rp.runner_id from public.runner_profiles rp
       join public.dispatch_offers o on o.runner_id=rp.runner_id
       join public.mission_legs l on l.id=o.leg_id
@@ -164,7 +166,7 @@ class PostgresExecutionTransaction implements ExecutionTransaction {
         and exists(select 1 from public.runner_availability_windows aw where aw.runner_id=rp.runner_id
           and aw.status='available' and aw.available_from<=l.service_window_start
           and aw.available_until>=l.service_window_end)
-      for update of rp`,[input.offerId,input.runnerId,input.now]);
+      `,[input.offerId,input.runnerId,input.now]);
     if(!eligible.rows.length)return false;
     const assigned=await this.client.query<{id:string}>(`update public.mission_legs l set status='assigned',
       assigned_runner_id=$1,sequence_version=sequence_version+1,updated_at=$2
