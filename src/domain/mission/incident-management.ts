@@ -49,7 +49,7 @@ const transitions: Readonly<Record<IncidentStatus, readonly IncidentStatus[]>> =
 const validText = (value: string, min: number, max: number) => typeof value === "string" && value.trim().length >= min && value.length <= max;
 function validateEvidence(refs: readonly string[]): boolean {
   return Array.isArray(refs) && refs.length <= 20 &&
-    refs.every(ref => validText(ref, 1, 128) && !/[\s]/.test(ref));
+    refs.every(ref => /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(ref));
 }
 
 export async function reportMissionIncident(input: {
