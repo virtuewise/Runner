@@ -12,7 +12,7 @@ export interface NetworkOperationsHandlerDependencies {
   readonly availabilityRepository: NetworkOperationsRepository;
   readonly incidentRepository: IncidentRepository;
   readonly queries: Pick<PostgresNetworkOperationsQueries,
-    "getRunnerAvailability" | "getRunnerOfferInbox" | "getMissionTracking" | "getDispatcherQueue">;
+    "getRunnerAvailability" | "getRunnerOfferInbox" | "getMissionTracking" | "getDispatcherQueue" | "getIncidentQueue">;
   readonly now: () => string;
 }
 const json = (body: unknown, status = 200): Response =>
@@ -24,6 +24,19 @@ const invalidRequest = () => json({ error: "INVALID_REQUEST" }, 400);
 
 export function createNetworkOperationsHandlers(deps: NetworkOperationsHandlerDependencies) {
   return {
+    async incidentQueue(request: Request): Promise<Response> {
+      if (request.method !== "GET") return methodNotAllowed();
+      const principal = await deps.authenticate(request);
+      if (!principal) return unauthenticated();
+      if (principal.role !== "trust_operator") return forbidden();
+      const url = new URL(request.url);
+      const rawLimit = url.searchParams.get("limit");
+      const limit = rawLimit === null ? 100 : Number(rawLimit);
+      if (!Number.isSafeInteger(limit) || limit < 1 || limit > 250) return invalidRequest();
+      const incidents = await deps.queries.getIncidentQueue({principal,now:deps.now(),limit});
+      return json({incidents});
+    },
+
     async reportIncident(request: Request): Promise<Response> {
       if (request.method !== "POST") return methodNotAllowed();
       const principal = await deps.authenticate(request);
