@@ -19,6 +19,7 @@ function fixture() {
   const events = [];
   const tx = {
     async insertMission(mission) { missions.set(mission.id, mission); },
+    async loadMission(id) { return missions.get(id) ?? null; },
     async loadMissionForUpdate(id) { return missions.get(id) ?? null; },
     async loadRunnerEligibility() { return null; },
     async saveMission(mission, expected) {
