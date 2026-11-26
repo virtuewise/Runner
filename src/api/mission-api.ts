@@ -1,4 +1,3 @@
-import { createHash, randomUUID } from "node:crypto";
 import {
   attachQuote, calculateQuote, createMission, publishMission,
   type CommandContext, type Mission, type MissionQuote, type MissionRepository,
@@ -83,8 +82,9 @@ function parseTerms(value: unknown): MissionTerms | null {
     prohibitedItemScreeningPassed: false,
   };
 }
-function hash(rawBody: string): string {
-  return createHash("sha256").update(rawBody, "utf8").digest("hex");
+async function hash(rawBody: string): Promise<string> {
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", new TextEncoder().encode(rawBody));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 function context(principal: AuthenticatedPrincipal, idempotencyKey: string, now: string, eventId: string, role = principal.role, actorId = principal.actorId): CommandContext {
   return { actorId, actorRole: role, occurredAt: now, eventId, idempotencyKey };
@@ -115,7 +115,7 @@ function authorizedToRead(mission: Mission, principal: AuthenticatedPrincipal): 
 
 export function createMissionApi(deps: MissionApiDependencies): (request: Request) => Promise<Response> {
   const now = deps.now ?? (() => new Date().toISOString());
-  const newId = deps.newId ?? randomUUID;
+  const newId = deps.newId ?? (() => globalThis.crypto.randomUUID());
 
   return async (request: Request): Promise<Response> => {
     const requestId = newId();
@@ -143,7 +143,7 @@ export function createMissionApi(deps: MissionApiDependencies): (request: Reques
         if (!await deps.screenManifest(terms)) return fail(422, "MANIFEST_SCREENING_REQUIRED", "The manifest has not passed the required item and regulatory screening.", requestId);
         const screenedTerms: MissionTerms = { ...terms, prohibitedItemScreeningPassed: true };
         return await deps.repository.unitOfWork.run(async (tx) => {
-          const claim = await tx.claimIdempotency({ actorId: principal.actorId, scope: "mission.create", key, requestHash: hash(raw) });
+          const claim = await tx.claimIdempotency({ actorId: principal.actorId, scope: "mission.create", key, requestHash: await hash(raw) });
           if (claim.kind === "replay") return response(claim.responseStatus, claim.responseBody);
           if (claim.kind === "conflict") return fail(409, "IDEMPOTENCY_KEY_REUSED", "This key was already used with a different or incomplete request.", requestId);
           const result = createMission({ id: newId(), requesterId: principal.actorId, terms: screenedTerms, context: context(principal, key, now(), newId()) });
@@ -175,7 +175,7 @@ export function createMissionApi(deps: MissionApiDependencies): (request: Reques
         if (raw.trim() !== "" && raw.trim() !== "{}") return fail(400, "UNEXPECTED_BODY", "This command does not accept client-supplied pricing or state.", requestId);
         const scope = `mission.${action}:${missionId}`;
         return await deps.repository.unitOfWork.run(async (tx) => {
-          const claim = await tx.claimIdempotency({ actorId: principal.actorId, scope, key, requestHash: hash(raw) });
+          const claim = await tx.claimIdempotency({ actorId: principal.actorId, scope, key, requestHash: await hash(raw) });
           if (claim.kind === "replay") return response(claim.responseStatus, claim.responseBody);
           if (claim.kind === "conflict") return fail(409, "IDEMPOTENCY_KEY_REUSED", "This key was already used with a different or incomplete request.", requestId);
           const mission = await tx.loadMissionForUpdate(missionId);
