@@ -77,19 +77,22 @@ class PostgresIncidentTransaction implements IncidentTransaction {
       [input.missionId,input.actor.actorId,"safety-hold:"+input.idempotencyKey]);
     if(replay.rows.length)return "replayed" as const;
     const mission=await this.client.query<{status:string;version:number}>(`select status,version from public.missions where id=$1 for update`,[input.missionId]);
-    if(!mission.rows[0])return "not_found" as const;
-    if(["delivered","closed","cancelled","expired","failed"].includes(mission.rows[0].status))return "terminal" as const;
-    if(mission.rows[0].status==="safety_hold")return "conflict" as const;
+    const missionRow=mission.rows[0];
+    if(!missionRow)return "not_found" as const;
+    if(["delivered","closed","cancelled","expired","failed"].includes(missionRow.status))return "terminal" as const;
+    if(missionRow.status==="safety_hold")return "conflict" as const;
     const updated=await this.client.query(`update public.missions set status='safety_hold',version=version+1,updated_at=$2
-      where id=$1 and version=$3 returning version`,[input.missionId,input.now,mission.rows[0].version]);
+      where id=$1 and version=$3 returning version`,[input.missionId,input.now,missionRow.version]);
     if(!updated.rows[0])return "conflict" as const;
     const sequence=await this.client.query<{next_sequence:number}>(`select coalesce(max(sequence),0)+1 as next_sequence
       from public.mission_events where mission_id=$1`,[input.missionId]);
+    const sequenceRow=sequence.rows[0];
+    if(!sequenceRow)throw new Error("Unable to allocate mission event sequence");
     await this.client.query(`insert into public.mission_events
       (event_id,mission_id,sequence,actor_id,actor_role,event_type,idempotency_key,from_status,to_status,payload,occurred_at)
       values(gen_random_uuid(),$1,$2,$3,'trust_operator','mission.safety_hold_placed',$4,$5,'safety_hold',$6::jsonb,$7)`,
-      [input.missionId,sequence.rows[0].next_sequence,input.actor.actorId,"safety-hold:"+input.idempotencyKey,
-        mission.rows[0].status,JSON.stringify({reason:input.reason}),input.now]);
+      [input.missionId,sequenceRow.next_sequence,input.actor.actorId,"safety-hold:"+input.idempotencyKey,
+        missionRow.status,JSON.stringify({reason:input.reason}),input.now]);
     return "placed" as const;
   }
 }
