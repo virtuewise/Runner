@@ -41,6 +41,18 @@ export class PostgresNetworkOperationsRepository implements NetworkOperationsRep
       client.release();
     }
   }
+  async getLocationSharing(runnerId: string): Promise<boolean> {
+    const result = await this.pool.connect();
+    try {
+      const consent = await result.query<{enabled:boolean}>(
+        "select enabled from public.runner_location_sharing where runner_id=$1 and purpose='active_mission'",
+        [runnerId],
+      );
+      return consent.rows[0]?.enabled === true;
+    } finally {
+      result.release();
+    }
+  }
   async setLocationSharing(input: { runnerId: string; enabled: boolean; updatedAt: string }): Promise<void> {
     const client = await this.pool.connect();
     try {
