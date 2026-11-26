@@ -69,10 +69,10 @@ test("PostgreSQL execution integration: migrations, concurrent dispatch, offer l
       assert.deepEqual(declined,{ok:false,reason:"NOT_PENDING"});
 
       const invalidatedChallenge=await issueCustodyChallenge({repository:custody,crypto:productionCustodyCrypto,
-        challengeId:randomUUID(),missionId:mission,legId:winning.offer.legId,releasingActorId:runner,
+        challengeId:randomUUID(),missionId:mission,legId:winning.legId,releasingActorId:runner,
         receivingActorId:requester,purpose:"relay_handover",now:stamp,ttlSeconds:120});
       assert.equal(invalidatedChallenge.ok,true);
-      const reassignment=await reassignDispatchLeg({repository:execution,legId:winning.offer.legId,now:stamp,
+      const reassignment=await reassignDispatchLeg({repository:execution,legId:winning.legId,now:stamp,
         actorId:dispatcher,actorRole:"dispatcher",reason:"operational reassignment test"});
       assert.equal(reassignment.offersRevoked,1);
       assert.equal(reassignment.challengesInvalidated,1);
@@ -82,7 +82,7 @@ test("PostgreSQL execution integration: migrations, concurrent dispatch, offer l
       assert.ok(invalidRow.rows[0].invalidated_at);
 
       const challenge=await issueCustodyChallenge({repository:custody,crypto:productionCustodyCrypto,
-        challengeId:randomUUID(),missionId:mission,legId:winning.offer.legId,releasingActorId:runner,
+        challengeId:randomUUID(),missionId:mission,legId:winning.legId,releasingActorId:runner,
         receivingActorId:requester,purpose:"final_delivery",now:stamp,ttlSeconds:120});
       assert.equal(challenge.ok,true);
       const token=challenge.plaintextToken;
