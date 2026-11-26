@@ -19,6 +19,7 @@ export interface RunnerAvailabilityInput {
 }
 export interface NetworkOperationsRepository {
   recordLocation(input: { runnerId: string; location: RunnerLocationInput; receivedAt: string; expiresAt: string }): Promise<"recorded" | "stale" | "sharing_disabled">;
+  getLocationSharing(runnerId: string): Promise<boolean>;
   setLocationSharing(input: { runnerId: string; enabled: boolean; updatedAt: string }): Promise<void>;
   setAvailability(input: { runnerId: string; window: RunnerAvailabilityInput; recordedAt: string }): Promise<void>;
 }
