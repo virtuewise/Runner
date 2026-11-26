@@ -40,6 +40,26 @@ export class PostgresNetworkOperationsRepository implements NetworkOperationsRep
       client.release();
     }
   }
+  async setLocationSharing(input: { runnerId: string; enabled: boolean; updatedAt: string }): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      await client.query("select runner_id from public.runner_profiles where runner_id=$1 for update", [input.runnerId]);
+      await client.query(`insert into public.runner_location_sharing(runner_id,purpose,enabled,updated_at)
+        values($1,'active_mission',$2,$3)
+        on conflict (runner_id,purpose) do update set enabled=excluded.enabled,updated_at=excluded.updated_at`,
+        [input.runnerId,input.enabled,input.updatedAt]);
+      if (!input.enabled) {
+        await client.query("delete from public.runner_location_snapshots where runner_id=$1", [input.runnerId]);
+      }
+      await client.query("commit");
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
   async setAvailability(input: { runnerId: string; window: RunnerAvailabilityInput; recordedAt: string }): Promise<void> {
     const client = await this.pool.connect();
     try {
