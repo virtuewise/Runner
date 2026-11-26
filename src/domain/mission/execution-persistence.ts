@@ -10,7 +10,7 @@ export interface ExecutionTransaction extends DispatchTransaction, CustodyTransa
   invalidateCustodyForLeg(input:{legId:string;now:string;actorId:string;actorRole:"dispatcher"|"trust_operator"}):Promise<number>;
   hasReassignmentEvent(input:{legId:string;actorId:string;idempotencyKey:string}):Promise<boolean>;
   appendReassignmentEvent(input:{legId:string;actorId:string;actorRole:"dispatcher"|"trust_operator";reason:string;occurredAt:string;idempotencyKey:string}):Promise<void>;
-  recordOfferEvent(input:{offer:DispatchOffer;actorId:string;actorRole:"runner"|"dispatcher"|"system";
+  recordOfferEvent(input:{offer:DispatchOffer;actorId:string;actorRole:"runner"|"dispatcher"|"trust_operator"|"system";
     eventType:string;reason:string;occurredAt:string;idempotencyKey:string}):Promise<void>;
 }
 export interface ExecutionRepository { transaction<T>(work:(tx:ExecutionTransaction)=>Promise<T>):Promise<T>; }
