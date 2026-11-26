@@ -46,6 +46,7 @@ function custodyFromRow(row:CustodyRow):CustodyChallenge {
 class PostgresExecutionTransaction implements ExecutionTransaction {
   private readonly client:PgClient;
   private currentLeg:DispatchLeg|null=null;
+  private currentNow:string="";
   constructor(client:PgClient){this.client=client;}
 
   async findOfferByIdempotencyKey(dispatcherId:string,key:string):Promise<DispatchOffer|null>{
@@ -56,8 +57,7 @@ class PostgresExecutionTransaction implements ExecutionTransaction {
     const q=await this.client.query<LegRow>(`select l.id,l.mission_id,l.leg_number,l.status,
       coalesce(l.origin->>'countryCode','') as origin_country,
       coalesce(l.destination->>'countryCode','') as destination_country,
-      coalesce(m.manifest->'requiredCapabilities','[]'::jsonb) as required_capabilities_json,
-      coalesce(array(select jsonb_array_elements_text(coalesce(m.manifest->'requiredCapabilities','[]'::jsonb))),'{}') as required_capabilities,
+      array(select jsonb_array_elements_text(coalesce(m.manifest->'requiredCapabilities','[]'::jsonb))) as required_capabilities,
       coalesce(m.manifest->>'requiredVehicleClass',null) as required_vehicle_class,
       l.service_window_start,l.service_window_end,l.sequence_version
       from public.mission_legs l join public.missions m on m.id=l.mission_id
@@ -71,7 +71,7 @@ class PostgresExecutionTransaction implements ExecutionTransaction {
       originCountry:row.origin_country,destinationCountry:row.destination_country,
       requiredCapabilities:row.required_capabilities??[],...(row.required_vehicle_class?{requiredVehicleClass:row.required_vehicle_class}:{}),
       serviceWindowStart:iso(row.service_window_start),serviceWindowEnd:iso(row.service_window_end),version:Number(row.sequence_version)};
-    this.currentLeg=leg; return leg;
+    this.currentLeg=leg; this.currentNow=input.now; return leg;
   }
   async findCandidates(leg:DispatchLeg,limit:number):Promise<readonly string[]>{
     const q=await this.client.query<{runner_id:string}>(`select rp.runner_id from public.runner_profiles rp
@@ -83,8 +83,6 @@ class PostgresExecutionTransaction implements ExecutionTransaction {
       and not exists(select 1 from unnest($4::text[]) required(code)
         where not exists(select 1 from public.runner_capabilities rc where rc.runner_id=rp.runner_id
           and rc.capability_code=required.code and rc.status='verified' and (rc.valid_until is null or rc.valid_until>$1::timestamptz)))
-      and $5=all(coalesce((select array_agg(rj.country_code) from public.runner_jurisdictions rj
-        where rj.runner_id=rp.runner_id and rj.status='approved'),'{}'::text[])) is not true
       and exists(select 1 from public.runner_jurisdictions rj where rj.runner_id=rp.runner_id
         and rj.country_code=$5 and rj.status='approved')
       and exists(select 1 from public.runner_jurisdictions rj where rj.runner_id=rp.runner_id
@@ -92,7 +90,7 @@ class PostgresExecutionTransaction implements ExecutionTransaction {
       and ($7::text is null or rp.vehicle_class=$7)
       order by (select count(*) from public.mission_legs active where active.assigned_runner_id=rp.runner_id
         and active.status not in ('delivered','cancelled','failed')),rp.created_at
-      limit $8`,[new Date().toISOString(),leg.serviceWindowStart,leg.serviceWindowEnd,leg.requiredCapabilities,
+      limit $8`,[this.currentNow,leg.serviceWindowStart,leg.serviceWindowEnd,leg.requiredCapabilities,
         leg.originCountry,leg.destinationCountry,leg.requiredVehicleClass??null,limit]);
     return q.rows.map(x=>x.runner_id);
   }
@@ -101,15 +99,17 @@ class PostgresExecutionTransaction implements ExecutionTransaction {
     const q=await this.client.query<RunnerRow>(`select rp.runner_id,rp.identity_status,rp.qualification_status,rp.is_active,
       rp.vehicle_class,rp.max_active_legs as capacity,
       coalesce((select array_agg(rc.capability_code) from public.runner_capabilities rc where rc.runner_id=rp.runner_id
-        and rc.status='verified' and (rc.valid_until is null or rc.valid_until>now())),'{}') as capabilities,
+        and rc.status='verified' and (rc.valid_until is null or rc.valid_until>$4::timestamptz)),'{}') as capabilities,
       coalesce((select array_agg(rj.country_code) from public.runner_jurisdictions rj where rj.runner_id=rp.runner_id
         and rj.status='approved'),'{}') as jurisdictions,
       aw.available_from,aw.available_until,
       (select count(*) from public.mission_legs active where active.assigned_runner_id=rp.runner_id
-        and active.status not in ('delivered','cancelled','failed')) as active_leg_count
+        and active.status not in ('delivered','cancelled','failed')) +
+      (select count(*) from public.dispatch_offers pending where pending.runner_id=rp.runner_id and pending.status='offered'
+        and pending.expires_at>$4::timestamptz) as active_leg_count
       from public.runner_profiles rp join public.runner_availability_windows aw on aw.runner_id=rp.runner_id
       where rp.runner_id=$1 and aw.status='available' and aw.available_from <= $2 and aw.available_until >= $3
-      order by aw.available_from limit 1`,[runnerId,this.currentLeg.serviceWindowStart,this.currentLeg.serviceWindowEnd]);
+      order by aw.available_from limit 1`,[runnerId,this.currentLeg.serviceWindowStart,this.currentLeg.serviceWindowEnd,this.currentNow]);
     const row=q.rows[0];if(!row)return null;
     return {runnerId:row.runner_id,identityVerified:row.identity_status==="verified",qualified:row.qualification_status==="qualified",
       active:row.is_active,capabilities:row.capabilities??[],approvedJurisdictions:row.jurisdictions??[],
