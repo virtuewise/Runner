@@ -14,6 +14,7 @@ export interface MissionApiDependencies {
   readonly authenticate: (request: Request) => Promise<AuthenticatedPrincipal | null>;
   readonly pricingPolicy: (terms: MissionTerms) => PricingPolicy;
   readonly estimateDistanceMetres: (terms: MissionTerms) => Promise<number>;
+  readonly screenManifest: (terms: MissionTerms) => Promise<boolean>;
   readonly pricingServiceActorId: string;
   readonly now?: () => string;
   readonly newId?: () => string;
@@ -69,8 +70,8 @@ function parseTerms(value: unknown): MissionTerms | null {
     destination: value.destination,
     requiredCapabilities: value.requiredCapabilities as string[],
     ...(typeof value.requiredVehicleClass === "string" ? { requiredVehicleClass: value.requiredVehicleClass as NonNullable<MissionTerms["requiredVehicleClass"]> } : {}),
-    // Screening is deliberately not client-controlled. Initial API only accepts the safe, non-regulated launch categories.
-    prohibitedItemScreeningPassed: true,
+    // This is set only after the server-side screening dependency approves the manifest.
+    prohibitedItemScreeningPassed: false,
   };
 }
 function hash(rawBody: string): string {
@@ -127,11 +128,13 @@ export function createMissionApi(deps: MissionApiDependencies): (request: Reques
         try { payload = JSON.parse(raw); } catch { return fail(400, "INVALID_JSON", "Request body must be valid JSON.", requestId); }
         const terms = isRecord(payload) ? parseTerms(payload.terms) : null;
         if (!terms) return fail(400, "INVALID_MISSION_TERMS", "Mission terms are incomplete or invalid.", requestId);
+        if (!await deps.screenManifest(terms)) return fail(422, "MANIFEST_SCREENING_REQUIRED", "The manifest has not passed the required item and regulatory screening.", requestId);
+        const screenedTerms: MissionTerms = { ...terms, prohibitedItemScreeningPassed: true };
         return deps.repository.unitOfWork.run(async (tx) => {
           const claim = await tx.claimIdempotency({ actorId: principal.actorId, scope: "mission.create", key, requestHash: hash(raw) });
           if (claim.kind === "replay") return response(claim.responseStatus, claim.responseBody);
           if (claim.kind === "conflict") return fail(409, "IDEMPOTENCY_KEY_REUSED", "This key was already used with a different or incomplete request.", requestId);
-          const result = createMission({ id: newId(), requesterId: principal.actorId, terms, context: context(principal, key, now(), newId()) });
+          const result = createMission({ id: newId(), requesterId: principal.actorId, terms: screenedTerms, context: context(principal, key, now(), newId()) });
           if (!result.ok) return domainFailure(result, requestId);
           await tx.insertMission(result.value);
           await tx.appendEvents(result.events);
