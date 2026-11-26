@@ -31,7 +31,7 @@ Shadow evaluation → dispatcher-assisted offers → limited automation behind a
 - PostgreSQL leg claims use row locks and `SKIP LOCKED`; Runner capacity reservations serialize on the Runner profile row.
 - Dispatcher-scoped offer idempotency, authenticated runner acceptance/decline commands, expiry batching and reassignment invalidation are implemented.
 - Outbox messages use leases, at-least-once publication, bounded retry and dead-letter state.
-- Custody challenges use a production Web Crypto adapter, persistent SHA-256 digests, row-locked two-party confirmation and reassignment invalidation.
+- Custody challenges use a production Web Crypto adapter, persistent SHA-256 digests, row-locked two-party confirmation, expiry cleanup and reassignment invalidation.
 - CI now provisions ephemeral PostgreSQL and runs migration/concurrency integration coverage.
 
 ## Known limitations
