@@ -176,7 +176,7 @@ export function createMissionApi(deps: MissionApiDependencies): (request: Reques
             const distance = await deps.estimateDistanceMetres(mission.terms);
             const quote: MissionQuote = calculateQuote({ terms: mission.terms, estimatedDistanceMetres: distance, policy: deps.pricingPolicy(mission.terms), now: now() });
             const result = attachQuote(mission, quote, context(principal, key, now(), newId(), "system", deps.pricingServiceActorId), expectedVersion);
-            if (!result.ok) return domainFailure(result, requestId);
+            if (!result.ok) throw domainFault(result);
             if (!await tx.saveMission(result.value, expectedVersion)) throw new ApiFault(409, "MISSION_VERSION_CONFLICT", "Mission changed; refresh and retry.");
             await tx.appendEvents(result.events);
             const body: ApiSuccess = { data: result.value, requestId };
@@ -185,8 +185,8 @@ export function createMissionApi(deps: MissionApiDependencies): (request: Reques
           }
           if (principal.role !== "requester" || mission.requesterId !== principal.actorId) throw new ApiFault(403, "FORBIDDEN", "Only the requester can publish this mission.");
           const result = publishMission(mission, context(principal, key, now(), newId()), expectedVersion);
-          if (!result.ok) return domainFailure(result, requestId);
-          if (!await tx.saveMission(result.value, expectedVersion)) return fail(409, "MISSION_VERSION_CONFLICT", "Mission changed; refresh and retry.", requestId);
+          if (!result.ok) throw domainFault(result);
+          if (!await tx.saveMission(result.value, expectedVersion)) throw new ApiFault(409, "MISSION_VERSION_CONFLICT", "Mission changed; refresh and retry.");
           await tx.appendEvents(result.events);
           const body: ApiSuccess = { data: result.value, requestId };
           await tx.completeIdempotency({ actorId: principal.actorId, scope, key, responseStatus: 200, responseBody: body });
