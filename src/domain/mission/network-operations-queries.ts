@@ -94,7 +94,8 @@ function mapLocation(row: RawRow): MissionTrackingLeg["location"] {
 
 /** Read models only. All identity and role values must come from verified server authentication. */
 export class PostgresNetworkOperationsQueries {
-  constructor(private readonly pool: NetworkOperationsReadPool) {}
+  private readonly pool: NetworkOperationsReadPool;
+  constructor(pool: NetworkOperationsReadPool) { this.pool = pool; }
 
   async getRunnerOfferInbox(input: {
     readonly authenticatedRunnerId: string;
