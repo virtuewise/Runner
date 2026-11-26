@@ -149,7 +149,7 @@ export function createMissionApi(deps: MissionApiDependencies): (request: Reques
 
       const missionMatch = url.pathname.match(/^\/v1\/missions\/([0-9a-f-]{36})(?:\/(quote|publish))?$/i);
       if (missionMatch && request.method === "GET" && !missionMatch[2]) {
-        const mission = await deps.repository.unitOfWork.run((tx) => tx.loadMissionForUpdate(missionMatch[1]));
+        const mission = await deps.repository.unitOfWork.run((tx) => tx.loadMission(missionMatch[1]));
         if (!mission || !authorizedToRead(mission, principal)) return fail(404, "MISSION_NOT_FOUND", "Mission was not found.", requestId);
         return response(200, { data: mission, requestId }, { etag: `"${mission.version}"` });
       }
