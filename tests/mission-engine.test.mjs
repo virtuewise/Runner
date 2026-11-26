@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createMission, attachQuote, publishMission, assignRunner, transitionMission, calculateQuote, canTransition } from "../src/domain/mission/index.ts";
 
 const terms = {
-  category: "parcel", description: "Sealed document pouch", declaredValueMinor: 0, weightGrams: 300,
+  category: "parcel", description: "Sealed document pouch", currency: "ZAR", declaredValueMinor: 0, weightGrams: 300,
   pickup: { countryCode: "ZA", locality: "Johannesburg", addressLine: "10 Main Road" },
   destination: { countryCode: "ZA", locality: "Sandton", addressLine: "20 Market Street" },
   requiredCapabilities: ["document-handling"], prohibitedItemScreeningPassed: true,
@@ -18,9 +18,9 @@ const runner = { runnerId:"runner-1", identityVerified:true, qualified:true, act
 function openMission() {
   const created = createMission({id:"mission-1",requesterId:"requester-1",terms,context:ctx("requester-1",0)});
   assert.equal(created.ok,true);
-  const quoted = attachQuote(created.value,quote,ctx("requester-1",1),0);
+  const quoted = attachQuote(created.value,quote,ctx("pricing-service",1,"system"),1);
   assert.equal(quoted.ok,true);
-  return publishMission(quoted.value,ctx("requester-1",2),1);
+  return publishMission(quoted.value,ctx("requester-1",2),2);
 }
 
 test("mission requires requester ownership and valid declared terms", () => {
@@ -38,26 +38,26 @@ test("mission follows draft -> quoted -> open with sequenced audit events", () =
 
 test("expired quotes and stale versions are rejected", () => {
   const created = createMission({id:"m",requesterId:"r",terms,context:ctx("r",0)});
-  const expired = attachQuote(created.value,{...quote,expiresAt:"2026-11-24T09:00:00.000Z"},ctx("r",1),0);
+  const expired = attachQuote(created.value,{...quote,expiresAt:"2026-11-24T09:00:00.000Z"},ctx("pricing-service",1,"system"),1);
   assert.equal(expired.error.code,"INVALID_INPUT");
   assert.equal(publishMission(created.value,ctx("r",2),99).error.code,"VERSION_CONFLICT");
 });
 
 test("assignment requires qualified, verified, active Runner and jurisdiction", () => {
   const opened = openMission().value;
-  assert.equal(assignRunner(opened,{...runner,identityVerified:false},ctx("dispatch-1",3,"dispatcher"),2).error.code,"INELIGIBLE_RUNNER");
-  assert.equal(assignRunner(opened,{...runner,jurisdictionCodes:["US"]},ctx("dispatch-1",3,"dispatcher"),2).error.code,"INELIGIBLE_RUNNER");
-  const assigned = assignRunner(opened,runner,ctx("dispatch-1",3,"dispatcher"),2);
+  assert.equal(assignRunner(opened,{...runner,identityVerified:false},ctx("dispatch-1",3,"dispatcher"),3).error.code,"INELIGIBLE_RUNNER");
+  assert.equal(assignRunner(opened,{...runner,jurisdictionCodes:["US"]},ctx("dispatch-1",3,"dispatcher"),3).error.code,"INELIGIBLE_RUNNER");
+  const assigned = assignRunner(opened,runner,ctx("dispatch-1",3,"dispatcher"),3);
   assert.equal(assigned.ok,true);
   assert.equal(assigned.value.assignedRunnerId,"runner-1");
 });
 
 test("only assigned Runner can advance custody lifecycle", () => {
-  const assigned = assignRunner(openMission().value,runner,ctx("dispatch-1",3,"dispatcher"),2).value;
-  assert.equal(transitionMission(assigned,"runner_en_route",ctx("other",4,"runner"),3).error.code,"FORBIDDEN");
-  const enRoute = transitionMission(assigned,"runner_en_route",ctx("runner-1",4,"runner"),3);
+  const assigned = assignRunner(openMission().value,runner,ctx("dispatch-1",3,"dispatcher"),3).value;
+  assert.equal(transitionMission(assigned,"runner_en_route",ctx("other",4,"runner"),4).error.code,"FORBIDDEN");
+  const enRoute = transitionMission(assigned,"runner_en_route",ctx("runner-1",4,"runner"),4);
   assert.equal(enRoute.ok,true);
-  assert.equal(transitionMission(enRoute.value,"delivered",ctx("runner-1",5,"runner"),4).error.code,"INVALID_TRANSITION");
+  assert.equal(transitionMission(enRoute.value,"delivered",ctx("runner-1",5,"runner"),5).error.code,"INVALID_TRANSITION");
 });
 
 test("pricing is deterministic, currency-explicit and rejects invalid input", () => {

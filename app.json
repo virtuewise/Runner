@@ -1,0 +1,3 @@
+{
+  "expo":{"name":"RUNNER","slug":"runner","scheme":"runner","version":"0.1.0","orientation":"portrait","userInterfaceStyle":"dark","newArchEnabled":true,"plugins":["expo-router"],"experiments":{"typedRoutes":true},"ios":{"supportsTablet":true,"bundleIdentifier":"com.virtuewise.runner"},"android":{"package":"com.virtuewise.runner"},"web":{"bundler":"metro","name":"RUNNER","shortName":"RUNNER"}}
+}
