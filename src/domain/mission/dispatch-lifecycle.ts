@@ -70,7 +70,7 @@ export async function reassignDispatchLeg(input: {
   if (!input.legId || !input.actorId || !input.reason.trim() || !Number.isFinite(Date.parse(input.now)))
     throw new Error("Invalid reassignment command");
   return input.repository.transaction(async (tx) => ({
-    offersRevoked: await tx.invalidateOffersForLeg({ legId: input.legId, now: input.now, reason: input.reason }),
-    challengesInvalidated: await tx.invalidateCustodyForLeg({ legId: input.legId, now: input.now }),
+    offersRevoked: await tx.invalidateOffersForLeg({ legId: input.legId, now: input.now, reason: input.reason, actorId: input.actorId }),
+    challengesInvalidated: await tx.invalidateCustodyForLeg({ legId: input.legId, now: input.now, actorId: input.actorId }),
   }));
 }
