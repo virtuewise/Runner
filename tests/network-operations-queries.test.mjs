@@ -68,3 +68,14 @@ test("dispatcher queue is ordered to surface safety holds and only exposes fresh
   assert.match(sql,/consent.enabled=true/);
   assert.equal(values[1],75);
 });
+
+test("Runner availability query is scoped to authenticated identity and excludes elapsed windows",async()=>{
+  let sql,values;
+  const queries=createPostgresNetworkOperationsQueries({async query(q,args){sql=q;values=args;return {rows:[{
+    id:"window",available_from:"2026-11-26T12:00:00Z",available_until:"2026-11-26T13:00:00Z",status:"available",
+  }]};}});
+  const windows=await queries.getRunnerAvailability({authenticatedRunnerId:"runner-auth",now:"2026-11-26T12:00:00Z"});
+  assert.equal(values[0],"runner-auth");
+  assert.match(sql,/available_until>$2/);
+  assert.equal(windows[0].status,"available");
+});
