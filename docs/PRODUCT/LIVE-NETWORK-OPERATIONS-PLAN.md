@@ -8,7 +8,7 @@ Make the execution engine operationally legible to Runners, dispatchers, request
 
 ## Delivery sequence
 
-1. **Network ingestion foundation** — consented Runner location, availability windows, freshness/sequence validation, expiry and privacy boundaries.
+1. **Network ingestion and API foundation** — consented Runner location, availability windows, freshness/sequence validation, expiry, privacy boundaries, authenticated offer inbox/response handlers, tracking and dispatcher read models.
 2. **Runner experience** — availability controls, offer inbox, offer detail, accept/decline, mission checklist and custody QR/NFC handover surfaces.
 3. **Dispatcher command centre** — dispatch queue, eligible Runner capacity, offer state, mission/relay timeline, stale-location warnings and controlled reassignment.
 4. **Mission tracking** — requester and operations views over authoritative mission/leg events; location is supplemental and freshness-labelled.
@@ -27,4 +27,4 @@ Make the execution engine operationally legible to Runners, dispatchers, request
 
 ## Current slice
 
-The first implementation slice establishes the Runner location/availability domain boundary and PostgreSQL storage. It does not provide an HTTP endpoint, identity provider, consent UI, realtime transport, dispatcher dashboard or production worker.
+The current engineering slice establishes Runner location/availability persistence, authenticated Fetch API handler factories, Runner offer inbox/accept-decline operations, requester/Runner mission tracking and dispatcher queue read models. It does not include a production identity provider, consent UX, mounted HTTP server, realtime transport, dispatcher dashboard UI, expiry worker or production deployment.
