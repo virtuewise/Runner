@@ -11,7 +11,7 @@ export interface ExecutionTransaction extends DispatchTransaction, CustodyTransa
   invalidateCustodyForLeg(input: { legId: string; now: string }): Promise<number>;
   recordOfferEvent(input: { offer: DispatchOffer; actorId: string; actorRole: "runner" | "dispatcher" | "system"; eventType: string; reason: string; occurredAt: string; idempotencyKey: string }): Promise<void>;
 }
-export interface ExecutionRepository extends DispatchRepository, CustodyRepository {
+export interface ExecutionRepository {
   transaction<T>(work: (tx: ExecutionTransaction) => Promise<T>): Promise<T>;
 }
 export type { DispatchLeg, DispatchOffer, DispatchRunner, CustodyChallenge };
