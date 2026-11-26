@@ -56,6 +56,7 @@ test("PostgreSQL execution integration: migrations, concurrent dispatch, offer l
 
       const network=createPostgresNetworkOperationsRepository(pool);
       await setRunnerLocationSharing({repository:network,authenticatedRunnerId:runner,enabled:true,now:stamp});
+      assert.equal(await network.getLocationSharing(runner),true);
       const location={latitude:-26.2041,longitude:28.0473,accuracyMetres:12,capturedAt:stamp,sequence:1};
       const locationWrite=await ingestRunnerLocation({repository:network,authenticatedRunnerId:runner,location,now:stamp});
       assert.deepEqual(locationWrite,{ok:true,value:{status:"recorded"}});
@@ -65,6 +66,7 @@ test("PostgreSQL execution integration: migrations, concurrent dispatch, offer l
       const storedLocation=await pool.query("select latitude,longitude,sequence from public.runner_location_snapshots where runner_id=$1",[runner]);
       assert.equal(storedLocation.rows[0].latitude,-26.2041,"duplicate or out-of-order device sequences cannot overwrite latest location");
       await setRunnerLocationSharing({repository:network,authenticatedRunnerId:runner,enabled:false,now:stamp});
+      assert.equal(await network.getLocationSharing(runner),false);
       const withdrawnLocation=await pool.query("select runner_id from public.runner_location_snapshots where runner_id=$1",[runner]);
       assert.equal(withdrawnLocation.rows.length,0,"withdrawing consent deletes the latest location snapshot");
       const disabledWrite=await ingestRunnerLocation({repository:network,authenticatedRunnerId:runner,location:{...location,sequence:2},now:stamp});
