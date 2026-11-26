@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { createDispatchOffer } from "../src/domain/mission/dispatch.ts";
 import { acceptDispatchOffer, declineDispatchOffer, reassignDispatchLeg } from "../src/domain/mission/dispatch-lifecycle.ts";
-import { issueCustodyChallenge, confirmCustody } from "../src/domain/mission/custody.ts";
+import { issueCustodyChallenge, confirmCustody, expireCustodyChallenges } from "../src/domain/mission/custody.ts";
 import { productionCustodyCrypto } from "../src/domain/mission/production-custody-crypto.ts";
 import { createPostgresExecutionRepository, createPostgresDispatchRepository, createPostgresCustodyRepository, createPostgresOutboxStore } from "../src/domain/mission/postgres-execution-repository.ts";
 import { processOutboxBatch } from "../src/domain/mission/outbox-worker.ts";
@@ -97,6 +97,16 @@ test("PostgreSQL execution integration: migrations, concurrent dispatch, offer l
         challengeId:challenge.challenge.id,actorId:requester,token,now:stamp});
       assert.equal(receive.ok,true);
       assert.equal(receive.challenge.status,"confirmed");
+
+      const expiring=await issueCustodyChallenge({repository:custody,crypto:productionCustodyCrypto,
+        challengeId:randomUUID(),missionId:mission,legId:winning.legId,releasingActorId:runner,
+        receivingActorId:requester,purpose:"pickup",now:stamp,ttlSeconds:30});
+      assert.equal(expiring.ok,true);
+      const expiredCount=await expireCustodyChallenges({repository:custody,
+        now:new Date(Date.parse(stamp)+31_000).toISOString(),batchSize:10});
+      assert.equal(expiredCount,1);
+      const expiredRow=await pool.query("select status from public.custody_handovers where challenge_id=$1",[expiring.challenge.id]);
+      assert.equal(expiredRow.rows[0].status,"expired");
 
       const outbox=createPostgresOutboxStore(pool);
       const sent=[];
