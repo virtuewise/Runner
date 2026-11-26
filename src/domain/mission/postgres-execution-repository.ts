@@ -69,7 +69,7 @@ class PostgresExecutionTransaction implements ExecutionTransaction {
       where l.status='open' and m.status in ('open','matching')
         and l.service_window_start <= $1::timestamptz
         and l.service_window_end >= $1::timestamptz
-      order by l.service_window_start,l.created_at
+      order by l.service_window_start,l.leg_number,l.created_at
       limit 1 for update of l skip locked`,[input.now]);
     const row=q.rows[0]; if(!row)return null;
     const leg:DispatchLeg={id:row.id,missionId:row.mission_id,legNumber:Number(row.leg_number),status:row.status,
