@@ -32,7 +32,7 @@ test("PostgreSQL execution integration: migrations, concurrent dispatch, offer l
       await pool.query(`insert into public.runner_availability_windows(runner_id,available_from,available_until,status)
         values($1,$2,$3,'available')`,[runner,start.toISOString(),end.toISOString()]);
       await pool.query(`insert into public.runner_profiles(runner_id,identity_status,qualification_status,is_active,
-        vehicle_class,max_active_legs) values($1,'verified','qualified',true,'car',1)`,[runnerTwo]);
+        vehicle_class,max_active_legs) values($1,'verified','pending',false,'car',1)`,[runnerTwo]);
       await pool.query(`insert into public.runner_capabilities(runner_id,capability_code,status) values($1,'sealed_parcel','verified')`,[runnerTwo]);
       await pool.query(`insert into public.runner_jurisdictions(runner_id,country_code,status) values($1,'ZA','approved')`,[runnerTwo]);
       await pool.query(`insert into public.runner_availability_windows(runner_id,available_from,available_until,status)
@@ -107,6 +107,7 @@ test("PostgreSQL execution integration: migrations, concurrent dispatch, offer l
       const stillAccepted=await pool.query("select status from public.dispatch_offers where id=$1",[duplicateOffer.id]);
       assert.equal(stillAccepted.rows[0].status,"accepted","replayed reassignment must not revoke later work");
 
+      await pool.query("update public.runner_profiles set qualification_status='qualified',is_active=true where runner_id=$1",[runnerTwo]);
       await pool.query("update public.mission_legs set status='assigned',assigned_runner_id=$1 where id=$2",[runnerTwo,legTwo]);
       const relayChallenge=await issueCustodyChallenge({repository:custody,crypto:productionCustodyCrypto,
         challengeId:randomUUID(),missionId:mission,legId:legOne,receivingLegId:legTwo,releasingActorId:runner,
