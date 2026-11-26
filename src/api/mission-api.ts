@@ -97,8 +97,10 @@ function domainFault(result: { readonly error: { readonly code: string; readonly
 }
 function versionHeader(request: Request): number | null {
   const value = request.headers.get("if-match");
-  if (!value || !/^"?(0|[1-9][0-9]*)"?$/.test(value)) return null;
-  const parsed = Number(value);
+  if (!value) return null;
+  const unquoted = value.replace(/^W\\//, "").replace(/^"|"$/g, "");
+  if (!/^(0|[1-9][0-9]*)$/.test(unquoted)) return null;
+  const parsed = Number(unquoted);
   return Number.isSafeInteger(parsed) ? parsed : null;
 }
 function idempotencyKey(request: Request): string | null {
