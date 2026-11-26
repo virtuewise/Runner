@@ -34,6 +34,7 @@ export async function issueCustodyChallenge(input: {
       !input.releasingActorId || !input.receivingActorId || input.releasingActorId === input.receivingActorId ||
       (input.purpose === "relay_handover" && !input.receivingLegId) ||
       (input.receivingLegId && input.receivingLegId === input.legId) ||
+      (input.purpose !== "relay_handover" && input.receivingLegId) ||
       !Number.isSafeInteger(input.ttlSeconds) || input.ttlSeconds < 30 || input.ttlSeconds > 900)
     throw new Error("Invalid custody challenge request");
   const plaintextToken = input.crypto.randomToken(32);
@@ -63,6 +64,8 @@ export async function confirmCustody(input: {
   return input.repository.transaction(async (tx) => {
     const challenge = await tx.loadChallengeForUpdate(input.challengeId);
     if (!challenge) return { ok: false, reason: "NOT_FOUND" };
+    if (input.actorId !== challenge.releasingActorId && input.actorId !== challenge.receivingActorId)
+      return { ok: false, reason: "FORBIDDEN" };
     if (challenge.status !== "pending") return { ok: false, reason: "REPLAYED" };
     if (Date.parse(challenge.expiresAt) <= now) {
       const expired: CustodyChallenge = { ...challenge, status: "expired", version: challenge.version + 1 };
@@ -71,8 +74,6 @@ export async function confirmCustody(input: {
         actorId: "00000000-0000-0000-0000-000000000000", type: "custody.challenge_expired", occurredAt: input.now });
       return { ok: false, reason: "EXPIRED" };
     }
-    if (input.actorId !== challenge.releasingActorId && input.actorId !== challenge.receivingActorId)
-      return { ok: false, reason: "FORBIDDEN" };
     if ((input.actorId === challenge.releasingActorId && challenge.releaseConfirmedAt) ||
         (input.actorId === challenge.receivingActorId && challenge.receiveConfirmedAt))
       return { ok: false, reason: "REPLAYED" };
