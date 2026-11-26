@@ -38,9 +38,9 @@ export async function issueCustodyChallenge(input: {
       !Number.isSafeInteger(input.ttlSeconds) || input.ttlSeconds < 30 || input.ttlSeconds > 900)
     throw new Error("Invalid custody challenge request");
   const plaintextToken = input.crypto.randomToken(32);
-  if (!plaintextToken || plaintextToken.length < 32) throw new Error("Custody token source did not return sufficient entropy");
+  if (!plaintextToken || plaintextToken.length < 64) throw new Error("Custody token source did not return sufficient entropy");
   const tokenHash = await input.crypto.hashToken(plaintextToken);
-  if (!/^[a-f0-9]{64,}$/i.test(tokenHash)) throw new Error("Custody token digest is invalid");
+  if (!/^[a-f0-9]{64}$/i.test(tokenHash)) throw new Error("Custody token digest must be a SHA-256 hex value");
   const challenge: CustodyChallenge = { id: input.challengeId, missionId: input.missionId, legId: input.legId,
     releasingActorId: input.releasingActorId, receivingActorId: input.receivingActorId,
     ...(input.receivingLegId ? { receivingLegId: input.receivingLegId } : {}), purpose: input.purpose,
@@ -59,7 +59,8 @@ export async function confirmCustody(input: {
   readonly actorId: string; readonly token: string; readonly now: string;
 }): Promise<CustodyResult> {
   const now = Date.parse(input.now);
-  if (!Number.isFinite(now) || !input.challengeId || !input.actorId || !input.token) throw new Error("Invalid custody confirmation");
+  if (!Number.isFinite(now) || !input.challengeId || !input.actorId || !input.token || input.token.length > 512)
+    throw new Error("Invalid custody confirmation");
   const suppliedHash = await input.crypto.hashToken(input.token);
   return input.repository.transaction(async (tx) => {
     const challenge = await tx.loadChallengeForUpdate(input.challengeId);
