@@ -26,6 +26,9 @@ interface ApiSuccess {
   readonly data: unknown;
   readonly requestId: string;
 }
+class ApiFault extends Error {
+  constructor(readonly status: number, readonly code: string, message: string) { super(message); }
+}
 type JsonRecord = Record<string, unknown>;
 
 function response(status: number, body: unknown, headers?: HeadersInit): Response {
@@ -80,11 +83,11 @@ function hash(rawBody: string): string {
 function context(principal: AuthenticatedPrincipal, idempotencyKey: string, now: string, eventId: string, role = principal.role, actorId = principal.actorId): CommandContext {
   return { actorId, actorRole: role, occurredAt: now, eventId, idempotencyKey };
 }
-function domainFailure(result: { readonly error: { readonly code: string; readonly message: string } }, requestId: string): Response {
+function domainFault(result: { readonly error: { readonly code: string; readonly message: string } }): ApiFault {
   const status = result.error.code === "FORBIDDEN" ? 403 :
     result.error.code === "VERSION_CONFLICT" || result.error.code === "IDEMPOTENCY_CONFLICT" ? 409 :
     result.error.code === "INELIGIBLE_RUNNER" ? 422 : 400;
-  return fail(status, result.error.code, result.error.message, requestId);
+  return new ApiFault(status, result.error.code, result.error.message);
 }
 function versionHeader(request: Request): number | null {
   const value = request.headers.get("if-match");
@@ -135,7 +138,7 @@ export function createMissionApi(deps: MissionApiDependencies): (request: Reques
           if (claim.kind === "replay") return response(claim.responseStatus, claim.responseBody);
           if (claim.kind === "conflict") return fail(409, "IDEMPOTENCY_KEY_REUSED", "This key was already used with a different or incomplete request.", requestId);
           const result = createMission({ id: newId(), requesterId: principal.actorId, terms: screenedTerms, context: context(principal, key, now(), newId()) });
-          if (!result.ok) return domainFailure(result, requestId);
+          if (!result.ok) throw domainFault(result);
           await tx.insertMission(result.value);
           await tx.appendEvents(result.events);
           const body: ApiSuccess = { data: result.value, requestId };
@@ -167,20 +170,20 @@ export function createMissionApi(deps: MissionApiDependencies): (request: Reques
           if (claim.kind === "replay") return response(claim.responseStatus, claim.responseBody);
           if (claim.kind === "conflict") return fail(409, "IDEMPOTENCY_KEY_REUSED", "This key was already used with a different or incomplete request.", requestId);
           const mission = await tx.loadMissionForUpdate(missionId);
-          if (!mission || (mission.requesterId !== principal.actorId && principal.role !== "dispatcher")) return fail(404, "MISSION_NOT_FOUND", "Mission was not found.", requestId);
+          if (!mission || (mission.requesterId !== principal.actorId && principal.role !== "dispatcher")) throw new ApiFault(404, "MISSION_NOT_FOUND", "Mission was not found.");
           if (action === "quote") {
-            if (principal.role !== "requester") return fail(403, "FORBIDDEN", "Only the requester can request a quote.", requestId);
+            if (principal.role !== "requester") throw new ApiFault(403, "FORBIDDEN", "Only the requester can request a quote.");
             const distance = await deps.estimateDistanceMetres(mission.terms);
             const quote: MissionQuote = calculateQuote({ terms: mission.terms, estimatedDistanceMetres: distance, policy: deps.pricingPolicy(mission.terms), now: now() });
             const result = attachQuote(mission, quote, context(principal, key, now(), newId(), "system", deps.pricingServiceActorId), expectedVersion);
             if (!result.ok) return domainFailure(result, requestId);
-            if (!await tx.saveMission(result.value, expectedVersion)) return fail(409, "MISSION_VERSION_CONFLICT", "Mission changed; refresh and retry.", requestId);
+            if (!await tx.saveMission(result.value, expectedVersion)) throw new ApiFault(409, "MISSION_VERSION_CONFLICT", "Mission changed; refresh and retry.");
             await tx.appendEvents(result.events);
             const body: ApiSuccess = { data: result.value, requestId };
             await tx.completeIdempotency({ actorId: principal.actorId, scope, key, responseStatus: 200, responseBody: body });
             return response(200, body, { etag: `"${result.value.version}"` });
           }
-          if (principal.role !== "requester" || mission.requesterId !== principal.actorId) return fail(403, "FORBIDDEN", "Only the requester can publish this mission.", requestId);
+          if (principal.role !== "requester" || mission.requesterId !== principal.actorId) throw new ApiFault(403, "FORBIDDEN", "Only the requester can publish this mission.");
           const result = publishMission(mission, context(principal, key, now(), newId()), expectedVersion);
           if (!result.ok) return domainFailure(result, requestId);
           if (!await tx.saveMission(result.value, expectedVersion)) return fail(409, "MISSION_VERSION_CONFLICT", "Mission changed; refresh and retry.", requestId);
@@ -191,7 +194,8 @@ export function createMissionApi(deps: MissionApiDependencies): (request: Reques
         });
       }
       return fail(404, "ROUTE_NOT_FOUND", "The requested API route does not exist.", requestId);
-    } catch {
+    } catch (error) {
+      if (error instanceof ApiFault) return fail(error.status, error.code, error.message, requestId);
       return fail(500, "INTERNAL_ERROR", "The request could not be completed.", requestId);
     }
   };
