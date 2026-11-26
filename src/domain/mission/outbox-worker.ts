@@ -34,7 +34,7 @@ export async function processOutboxBatch(input: {
       await input.store.markPublished({ id: message.id, publishedAt: input.now });
       published += 1;
     } catch {
-      const attempts = message.attempts + 1;
+      const attempts = message.attempts;
       if (attempts >= p.maxAttempts) {
         await input.store.moveToDeadLetter({ id: message.id, failedAt: input.now, errorCode: "publisher_failed" });
         deadLettered += 1;
