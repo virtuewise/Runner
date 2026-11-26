@@ -12,8 +12,8 @@ test("Runner inbox is scoped to the authenticated Runner and excludes expired/no
   }]};}});
   const inbox=await queries.getRunnerOfferInbox({authenticatedRunnerId:"verified-server-runner",now:"2026-11-26T12:00:00Z"});
   assert.equal(values[0],"verified-server-runner");
-  assert.match(query,/o.runner_id=$1/);
-  assert.match(query,/o.expires_at>$2/);
+  assert.ok(query.includes("o.runner_id=$1"));
+  assert.ok(query.includes("o.expires_at>$2"));
   assert.equal(inbox[0].declaredValueMinor,1200);
   assert.equal(inbox[0].status,"offered");
 });
@@ -34,7 +34,7 @@ test("mission tracking only returns consented, unexpired location snapshots", as
     count++;
     if(count===1)return {rows:[{id:"mission",status:"in_custody",version:3,created_at:"2026-11-26T12:00:00Z",
       updated_at:"2026-11-26T12:01:00Z",pickup:{},destination:{}}]};
-    if(count===2){assert.match(sql,/s.expires_at>$2/);assert.match(sql,/consent.enabled=true/);return {rows:[{
+    if(count===2){assert.ok(sql.includes("s.expires_at>$2"));assert.match(sql,/consent.enabled=true/);return {rows:[{
       leg_id:"leg",leg_number:1,status:"in_custody",assigned_runner_id:"runner",origin:{},destination:{},
       service_window_start:null,service_window_end:null,location_latitude:-26.2,location_longitude:28.0,
       location_accuracy_metres:10,location_captured_at:"2026-11-26T12:00:30Z",location_expires_at:"2026-11-26T12:05:00Z",
@@ -64,7 +64,7 @@ test("dispatcher queue is ordered to surface safety holds and only exposes fresh
     principal:{actorId:"dispatcher",role:"dispatcher"},now:"2026-11-26T12:00:00Z",limit:75,
   });
   assert.match(sql,/safety_hold/);
-  assert.match(sql,/s.expires_at>$1/);
+  assert.ok(sql.includes("s.expires_at>$1"));
   assert.match(sql,/consent.enabled=true/);
   assert.equal(values[1],75);
 });
@@ -76,6 +76,6 @@ test("Runner availability query is scoped to authenticated identity and excludes
   }]};}});
   const windows=await queries.getRunnerAvailability({authenticatedRunnerId:"runner-auth",now:"2026-11-26T12:00:00Z"});
   assert.equal(values[0],"runner-auth");
-  assert.match(sql,/available_until>$2/);
+  assert.ok(sql.includes("available_until>$2"));
   assert.equal(windows[0].status,"available");
 });
