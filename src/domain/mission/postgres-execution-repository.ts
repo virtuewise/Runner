@@ -262,8 +262,20 @@ class PostgresExecutionTransaction implements ExecutionTransaction {
         challenge.status==="invalidated"?new Date().toISOString():null,challenge.id,expectedVersion]);
     return q.rowCount===1;
   }
+  async expireChallenges(now:string,limit:number):Promise<readonly CustodyChallenge[]>{
+    const q=await this.client.query<CustodyRow>(`with expired as (
+      select challenge_id from public.custody_handovers where status='initiated'
+        and invalidated_at is null and expires_at<=$1
+      order by expires_at limit $2 for update skip locked
+    ) update public.custody_handovers h set status='expired',version=version+1
+      from expired where h.challenge_id=expired.challenge_id
+      returning h.challenge_id,h.mission_id,h.from_leg_id,h.to_leg_id,h.releasing_actor_id,h.receiving_actor_id,
+        encode(h.token_hash,'hex') as token_hash_hex,h.purpose,h.expires_at,h.status,h.release_confirmed_at,
+        h.receive_confirmed_at,h.version,h.invalidated_at`,[now,limit]);
+    return q.rows.map(custodyFromRow);
+  }
   async appendCustodyEvent(input:{challengeId:string;missionId:string;legId:string;actorId:string;
-    type:"custody.challenge_issued"|"custody.release_confirmed"|"custody.receive_confirmed"|"custody.handover_confirmed"|"custody.challenge_invalidated";
+    type:"custody.challenge_issued"|"custody.release_confirmed"|"custody.receive_confirmed"|"custody.handover_confirmed"|"custody.challenge_invalidated"|"custody.challenge_expired";
     occurredAt:string}):Promise<void>{
     const role=await this.client.query<{actor_role:"requester"|"runner"|"system"}>(`select case
       when m.requester_id=$2 then 'requester'
