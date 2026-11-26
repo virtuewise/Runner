@@ -12,7 +12,7 @@ function dispatchFixture(override = {}) {
     vehicleClass:"car",approvedJurisdictions:["ZA"],availableFrom:"2026-11-26T09:00:00.000Z",
     availableUntil:"2026-11-26T13:00:00.000Z",activeLegCount:0,capacity:1,...override};
   const repository={async transaction(work){return work({
-    async lockNextOpenLeg(){return leg;},async findCandidates(){return [runner.runnerId];},async loadRunner(){return runner;},
+    async findOfferByIdempotencyKey(){return null;},async lockNextOpenLeg(){return leg;},async findCandidates(){return [runner.runnerId];},async loadRunner(){return runner;},
     async createOffer(o){offers.push(o);},async appendEvent(e){events.push(e);},async enqueueOutbox(e){outbox.push(e);}
   });}};
   return {repository,events,outbox,offers};
