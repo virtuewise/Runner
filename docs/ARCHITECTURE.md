@@ -1,58 +1,99 @@
-# RUNNER system architecture
+# RUNNER System Architecture
 
-**Status:** Initial architecture baseline  
-**Date:** 2026-11-24
+**Status:** Architecture baseline; production deployment and provider integrations pending  
+**Reviewed:** 2026-11-26
 
 ## Product boundary
 
-RUNNER is a mission network for moving permitted items between people and organizations. A mission is a governed workflow with a requester, an item declaration, pickup and destination, eligibility constraints, a reward, custody events, and verifiable completion.
+RUNNER is a mission network for moving permitted items between people and organizations. A mission has a requester, item declaration, pickup and destination, eligibility constraints, quote, custody events and verifiable completion. It is not a ride-hailing trip or food-order clone.
 
-The product must not be modelled as a ride-hailing trip or a food order. People may act as requesters and, after qualification, as Runners.
+## C4 — System context
 
-## Initial topology
+```mermaid
+flowchart LR
+  Requester[Requester] --> RunnerSystem((RUNNER Platform))
+  Courier[Runner] --> RunnerSystem
+  Dispatch[Dispatcher] --> RunnerSystem
+  Trust[Trust Operator] --> RunnerSystem
+  RunnerSystem --> Identity[Identity Provider]
+  RunnerSystem --> Maps[Routing / Maps Provider]
+  RunnerSystem --> Screening[Manifest Screening]
+  RunnerSystem --> Notify[Notification Provider]
+  RunnerSystem --> Payments[Payment Provider]
+```
 
-- **Client:** Expo SDK 58 / React Native 0.88 / React 19.3 / Expo Router. One universal application target for iOS, Android, and web.
-- **Domain layer:** typed mission contracts and pure business rules, independent of UI and persistence.
-- **Backend boundary:** separately deployable API and event-processing layer. No client may write directly to privileged tables or make trust decisions.
-- **Identity and access:** verified identity, role and capability grants, device/session controls, and least-privilege authorization.
-- **Data:** relational source of truth for mission state and custody events; append-only audit history for sensitive transitions.
-- **Realtime:** server-authorized mission updates; location sharing only during an active, consented mission and only for authorized viewers.
-- **Payments:** provider abstraction, idempotent payment intents, ledger reconciliation, refunds and dispute workflows. Never store raw card data.
-- **Operations:** observability, alerting, support tooling, fraud review and incident response.
+External providers shown are architectural dependencies, not currently configured integrations.
+
+## C4 — Container view
+
+```mermaid
+flowchart TB
+  Mobile[Expo Client] --> API[Mission API Boundary]
+  API --> Domain[Mission Domain Modules]
+  Domain --> DB[(PostgreSQL)]
+  API --> Auth[Authentication Adapter]
+  Domain --> Screen[Manifest Screening Port]
+  Domain --> Route[Distance / Routing Port]
+  Domain --> Events[Transactional Events / Outbox]
+  Events --> Notify[Notification Adapter]
+```
+
+The API is currently a framework-neutral Fetch handler. Provider adapters, deployment HTTP server, authentication implementation and live event workers remain to be built.
+
+## C4 — Component boundaries
+
+- Client: presentation, local interaction and authenticated API calls; never authoritative for pricing, eligibility, screening or custody.
+- API: request parsing, authentication boundary, resource authorization, idempotency and error mapping.
+- Mission domain: lifecycle, pricing contracts, policy, relay candidate planning and invariants.
+- Persistence: PostgreSQL unit-of-work, mission projections, row locking, optimistic versions, events and idempotency receipts.
+- Provider ports: identity, screening, routing, notifications and payments. Fail closed where safety or authorization depends on the provider.
+
+## C4 — Mission API component view
+
+```mermaid
+flowchart TD
+  HTTP[HTTP Adapter - pending] --> Handler[Fetch Mission Handler]
+  Handler --> Auth[Principal Verification Port]
+  Handler --> Commands[Mission Commands]
+  Commands --> Policy[Lifecycle and Authorization Policy]
+  Commands --> Pricing[Pricing Service Port]
+  Commands --> Screening[Manifest Screening Port]
+  Commands --> Routing[Distance / Routing Port]
+  Commands --> Repo[Mission Repository / Unit of Work]
+  Repo --> PG[(PostgreSQL Adapter)]
+  Commands --> Audit[Mission Event Append]
+```
+
+The handler and domain command path are implemented. HTTP adapter, concrete principal verifier and external service adapters are injection points, not configured production components.
 
 ## Core domain concepts
 
-- Account: authenticated person or organization.
-- RunnerProfile: qualification status, declared capabilities, service area and reputation signals.
-- VehicleProfile: optional verified transport capability.
-- Mission: immutable identity and versioned terms for a movement request.
-- MissionOffer: a Runner's offer or acceptance under the mission's assignment policy.
-- MissionAssignment: authoritative allocation to one eligible Runner.
-- CustodyEvent: pickup, transfer, exception and delivery evidence.
-- MissionProof: evidence metadata and access policy; sensitive media is private by default.
-- PaymentIntent and LedgerEntry: payment lifecycle and auditable money movement.
-- SafetyCase: incident, prohibited-item, dispute or safeguarding workflow.
+Account, RunnerProfile, VehicleProfile, Mission, MissionLeg, MissionAssignment, CustodyHandover, MissionEvent, MissionProof, PaymentIntent/LedgerEntry and SafetyCase.
 
 ## Mission lifecycle
 
-draft -> quoted -> open -> assigned -> runner_en_route -> at_pickup -> in_custody -> en_route_to_destination -> delivered -> closed
+draft → quoted → open → assigned → in progress → delivered → closed.
 
-Exceptional states are explicit: cancelled, expired, failed, disputed, safety_hold. State changes are server-authoritative, validated against a transition table, idempotent, timestamped and attributable. Never infer custody from GPS alone.
+Exceptional states include cancelled, expired, failed, disputed and safety_hold. State changes are server-authoritative, validated, idempotent, timestamped and attributable. GPS alone never proves custody.
 
 ## Non-negotiable controls
 
-1. No mission can be accepted until the Runner meets the mission's identity, capability, vehicle and jurisdiction requirements.
-2. Pickup and delivery use explicit handoff evidence (PIN/QR/signature or policy-specific proof).
-3. GPS is a supporting signal, not proof of possession or delivery.
-4. High-value, age-restricted, regulated, hazardous or prohibited goods require policy gates or are rejected.
-5. Exact addresses and location traces are private, short-lived where possible, and never exposed in public mission discovery.
-6. Money movement and mission state transitions are idempotent and auditable.
-7. Rate limits, abuse controls, fraud review and emergency escalation are part of the platform—not later add-ons.
+1. Runner identity, capability, vehicle, jurisdiction and capacity are verified before assignment.
+2. Custody uses explicit authenticated handoff evidence.
+3. GPS is supporting evidence, not proof of possession or delivery.
+4. Prohibited/regulated item policy gates fail closed.
+5. Addresses and location traces are private and purpose-limited.
+6. Money and mission transitions are idempotent and auditable.
+7. Abuse controls, fraud review and emergency escalation are core platform functions.
 
 ## Deployment evolution
 
-Start with a modular monolith and a well-defined domain boundary. Split services only when independent scaling, team ownership or fault isolation justify the operational cost. Prefer managed infrastructure and portable interfaces; avoid premature microservices.
+Start with a modular monolith and explicit domain boundaries. Extract services only when independent scaling, team ownership or fault isolation justify it. PostgreSQL is the transactional source of truth. Avoid premature microservices and infrastructure.
 
 ## Current implementation status
 
-The repository contains a client foundation and design prototype. Authentication, backend persistence, dispatch, payments, identity verification, maps, push notifications and production proof-of-delivery are not yet implemented.
+Implemented in repository: Expo client foundation; mission domain engine; pricing and relay candidate planner; PostgreSQL schema/repository adapter; initial Fetch-based mission API; automated domain/API tests.
+
+Not implemented or deployed: production HTTP adapter, live identity provider, screening/routing integrations, dispatch workers, custody challenge issuance, payments, live location, realtime updates, cloud topology, observability deployment and native release builds.
+
+See [ADR index](adr/README.md), [data model](DATA-MODEL.md), [security plan](SECURITY-PRIVACY.md) and [go-live checklist](GO-LIVE.md).

@@ -1,32 +1,51 @@
 # RUNNER
 
+**A peer-to-peer movement and logistics network.**
+
 > RUNNER isn't about what you're carrying. It's about getting it there.
->
-> Every mission has a destination. Every destination needs a Runner.
 
-RUNNER is a trusted, people-powered movement and logistics network. It connects people and organizations who need something moved with qualified independent Runners who can take responsibility for getting it there.
+RUNNER coordinates missions, people, relay legs and verifiable custody from origin to destination.
 
-## Product direction
+## Status
 
-RUNNER is mission-first, not order-first. The platform is designed around verified requests, qualified Runners, transparent mission terms, accountable handoffs, and proof of completion. It is not a food-delivery clone or a ride-hailing product.
+Early-stage engineering. The repository contains an Expo client foundation, mission domain engine, relay candidate planner, PostgreSQL persistence foundation and initial framework-neutral mission API. It is not yet a production logistics service.
 
-## Engineering direction
+Read the [documentation lifecycle](docs/README.md), [product vision](docs/PRODUCT/VISION.md), [PRD](docs/PRODUCT/PRD.md) and [go-live gates](docs/GO-LIVE.md).
 
-The initial client is a cross-platform application built with Expo SDK 58, React Native 0.88, React 19.3, TypeScript 7, and Expo Router. Dependencies must be stable, mutually compatible, and pinned. Preview, beta, canary, nightly, and `latest` dependency ranges are not permitted in production manifests.
+## Prerequisites
 
-## Repository status
+- Node.js 22.13+
+- npm
+- Git
+- PostgreSQL only for database integration work
 
-This repository is being established from an empty starting point. The first implementation milestone is the RUNNER product foundation and a polished, accessible cross-platform experience. Backend integrations, payments, identity verification, live location, and production dispatch must be introduced behind explicit contracts and security reviews—not simulated as production capabilities.
+## Quickstart
 
-## Principles
+```bash
+git clone https://github.com/virtuewise/Runner.git
+cd Runner
+npm install
+npm test
+npm run typecheck
+```
 
-- Safety and trust before growth.
-- Mission clarity before dispatch automation.
-- Human accountability at every custody handoff.
-- Privacy by default and least-privilege access.
-- Accessibility, resilience, observability, and testability from day one.
-- Build a global network with local operational rules.
+Use the scripts in package.json to start Expo. Native builds and device testing remain required before app release.
 
-## Development
+## Environment
 
-See `docs/ENGINEERING.md` and `docs/ARCHITECTURE.md` for the initial standards and system boundaries.
+Copy .env.example to .env. API dependencies are injected; identity and provider variables are placeholders, not configured services. Never commit secrets.
+
+## Repository map
+
+- app/ — Expo Router client
+- src/domain/mission/ — domain, pricing, relay and persistence
+- src/api/ — framework-neutral API handlers
+- database/migrations/ — PostgreSQL schema
+- tests/ — automated tests
+- docs/ — product, architecture, security, quality and operations
+
+Read CONTRIBUTING.md. Material decisions belong in docs/adr/; complex plans in docs/rfcs/.
+
+## Limitations
+
+No production identity provider, deployed database, dispatch workers, custody challenge issuance, payments, live GPS, geospatial stack, production routing integration, deployment pipeline or compliance certification is claimed.
