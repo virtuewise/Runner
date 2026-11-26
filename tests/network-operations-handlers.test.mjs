@@ -8,6 +8,17 @@ function fixture(principal) {
   const handlers=createNetworkOperationsHandlers({
     async authenticate(){return principal;},
     availabilityRepository:{async recordLocation(){return "recorded";},async setLocationSharing(){},async setAvailability(input){calls.push(["availability",input.runnerId,input.window.status]);}},
+    incidentRepository:{async transaction(work){return work({
+      async createIncident(input){calls.push(["incident-report",input.actor.actorId]);return {incident:{
+        id:input.id,missionId:input.missionId,legId:input.legId,reporterId:input.actor.actorId,reporterRole:input.actor.role,
+        category:input.category,severity:input.severity,status:"open",title:input.title,description:input.description,
+        evidenceRefs:input.evidenceRefs,assignedOperatorId:null,resolutionCode:null,resolutionNote:null,
+        createdAt:input.now,updatedAt:input.now,resolvedAt:null,version:1,
+      },replayed:false};},
+      async loadIncidentForUpdate(){return null;},async hasIncidentEvent(){return false;},
+      async saveIncident(){return true;},async appendIncidentEvent(){},
+      async placeMissionSafetyHold(input){calls.push(["safety-hold",input.actor.actorId]);return "placed";},
+    });}},
     executionRepository:{async transaction(work){return work({
       async loadOfferForUpdate(id){return {id,legId:"leg",missionId:"mission",runnerId:"runner",
         status:"offered",expiresAt:"2026-11-26T12:02:00.000Z",createdAt:now,version:1};},
@@ -94,4 +105,36 @@ test("non-Runner cannot change availability",async()=>{
   }));
   assert.equal(response.status,403);
   assert.equal(calls.length,0);
+});
+
+test("authenticated requester can report an incident without supplying reporter identity",async()=>{
+  const {handlers,calls}=fixture({actorId:"requester-auth",role:"requester"});
+  const response=await handlers.reportIncident(new Request("https://runner.test/incidents",{
+    method:"POST",headers:{"content-type":"application/json"},
+    body:JSON.stringify({missionId:"mission",idempotencyKey:"incident-1",category:"delay",severity:"medium",
+      title:"Mission delayed",description:"Pickup window has been missed.",reporterId:"attacker"}),
+  }));
+  assert.equal(response.status,200);
+  assert.deepEqual(calls,[["incident-report","requester-auth"]]);
+});
+test("only trust operators can transition incidents and place safety holds",async()=>{
+  const {handlers,calls}=fixture({actorId:"runner",role:"runner"});
+  const transition=await handlers.transitionIncident(new Request("https://runner.test/incidents/1",{
+    method:"POST",headers:{"content-type":"application/json"},
+    body:JSON.stringify({incidentId:"1",expectedVersion:1,nextStatus:"triaged",idempotencyKey:"triage-1"}),
+  }));
+  const hold=await handlers.placeSafetyHold(new Request("https://runner.test/missions/1/safety-hold",{
+    method:"POST",headers:{"content-type":"application/json"},
+    body:JSON.stringify({missionId:"mission",reason:"safety issue",idempotencyKey:"hold-1"}),
+  }));
+  assert.equal(transition.status,403);assert.equal(hold.status,403);assert.equal(calls.length,0);
+});
+test("trust operator can place a mission safety hold through the authenticated boundary",async()=>{
+  const {handlers,calls}=fixture({actorId:"trust-operator",role:"trust_operator"});
+  const response=await handlers.placeSafetyHold(new Request("https://runner.test/missions/1/safety-hold",{
+    method:"POST",headers:{"content-type":"application/json"},
+    body:JSON.stringify({missionId:"mission",reason:"Safety review required",idempotencyKey:"hold-1"}),
+  }));
+  assert.equal(response.status,200);
+  assert.deepEqual(calls,[["safety-hold","trust-operator"]]);
 });
