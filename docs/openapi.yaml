@@ -91,6 +91,33 @@ paths:
           description: Mission and relay tracking projection
         '401': { $ref: '#/components/responses/ApiError' }
         '404': { $ref: '#/components/responses/ApiError' }
+  /v1/runner/location-sharing:
+    get:
+      operationId: getRunnerLocationSharing
+      summary: Read the authenticated Runner's active-mission location consent
+      responses:
+        '200': { description: Purpose-scoped location sharing setting }
+        '401': { $ref: '#/components/responses/ApiError' }
+        '403': { $ref: '#/components/responses/ApiError' }
+    post:
+      operationId: setRunnerLocationSharing
+      summary: Enable or withdraw active-mission location sharing
+      description: Runner identity is derived from the verified principal. Withdrawal deletes the stored latest location snapshot.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [enabled]
+              properties:
+                enabled: { type: boolean }
+      responses:
+        '200': { description: Consent setting updated }
+        '400': { $ref: '#/components/responses/ApiError' }
+        '401': { $ref: '#/components/responses/ApiError' }
+        '403': { $ref: '#/components/responses/ApiError' }
   /v1/runner/availability:
     get:
       summary: Read the authenticated Runner's availability windows
