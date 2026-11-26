@@ -48,6 +48,24 @@ The API is currently a framework-neutral Fetch handler. Provider adapters, deplo
 - Persistence: PostgreSQL unit-of-work, mission projections, row locking, optimistic versions, events and idempotency receipts.
 - Provider ports: identity, screening, routing, notifications and payments. Fail closed where safety or authorization depends on the provider.
 
+## C4 — Mission API component view
+
+```mermaid
+flowchart TD
+  HTTP[HTTP Adapter - pending] --> Handler[Fetch Mission Handler]
+  Handler --> Auth[Principal Verification Port]
+  Handler --> Commands[Mission Commands]
+  Commands --> Policy[Lifecycle and Authorization Policy]
+  Commands --> Pricing[Pricing Service Port]
+  Commands --> Screening[Manifest Screening Port]
+  Commands --> Routing[Distance / Routing Port]
+  Commands --> Repo[Mission Repository / Unit of Work]
+  Repo --> PG[(PostgreSQL Adapter)]
+  Commands --> Audit[Mission Event Append]
+```
+
+The handler and domain command path are implemented. HTTP adapter, concrete principal verifier and external service adapters are injection points, not configured production components.
+
 ## Core domain concepts
 
 Account, RunnerProfile, VehicleProfile, Mission, MissionLeg, MissionAssignment, CustodyHandover, MissionEvent, MissionProof, PaymentIntent/LedgerEntry and SafetyCase.
