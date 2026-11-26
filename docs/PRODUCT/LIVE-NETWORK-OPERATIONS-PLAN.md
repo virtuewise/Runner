@@ -12,7 +12,7 @@ Make the execution engine operationally legible to Runners, dispatchers, request
 2. **Runner experience** — availability controls, offer inbox, offer detail, accept/decline, mission checklist and custody QR/NFC handover surfaces.
 3. **Dispatcher command centre** — dispatch queue, eligible Runner capacity, offer state, mission/relay timeline, stale-location warnings and controlled reassignment.
 4. **Mission tracking** — requester and operations views over authoritative mission/leg events; location is supplemental and freshness-labelled.
-5. **Trust operations** — incident intake, safety holds, disputes, evidence preservation, escalation and resolution audit.
+5. **Trust operations** — incident intake, safety holds, disputes, evidence references, escalation and resolution audit. Initial audited incident persistence and trust-operator commands are now implemented.
 6. **Realtime and resilience** — authenticated event stream, reconnect/replay cursors, offline-safe read state and alerting.
 
 ## Cross-cutting requirements
