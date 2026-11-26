@@ -11,8 +11,10 @@ enhancement:
           - "app/**"
           - "src/**"
 
-documentation:
+enhancement:
   - changed-files:
       - any-glob-to-any-file:
+          - "app/**"
+          - "src/**"
           - "docs/**"
           - "*.md"
