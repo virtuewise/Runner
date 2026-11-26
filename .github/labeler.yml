@@ -1,0 +1,30 @@
+# Labels are applied from changed file paths. Keep patterns broad and deterministic.
+documentation:
+  - changed-files:
+      - any-glob-to-any-file: "docs/**"
+
+backend:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/domain/**"
+          - "src/api/**"
+          - "database/**"
+
+frontend:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "app/**"
+          - "src/ui/**"
+
+tests:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "tests/**"
+          - "**/*.test.*"
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/**"
+          - "package.json"
+          - "tsconfig.json"
