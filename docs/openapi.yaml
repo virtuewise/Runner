@@ -1,0 +1,153 @@
+openapi: 3.1.0
+info:
+  title: RUNNER Mission API
+  version: 0.2.0
+  description: Initial mission command API. Provider adapters and production deployment are not yet configured.
+servers:
+  - url: https://api.example.invalid
+    description: Placeholder only; no production endpoint is deployed.
+security:
+  - bearerAuth: []
+paths:
+  /health:
+    get:
+      security: []
+      summary: Liveness check
+      responses:
+        '200':
+          description: Process is responding
+  /v1/missions:
+    post:
+      summary: Create a mission draft
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [terms]
+              properties:
+                terms:
+                  $ref: '#/components/schemas/MissionTerms'
+      responses:
+        '201':
+          description: Mission draft created
+          headers:
+            ETag:
+              schema: { type: string }
+        '400': { $ref: '#/components/responses/ApiError' }
+        '401': { $ref: '#/components/responses/ApiError' }
+        '403': { $ref: '#/components/responses/ApiError' }
+        '409': { $ref: '#/components/responses/ApiError' }
+        '422': { $ref: '#/components/responses/ApiError' }
+  /v1/missions/{missionId}:
+    parameters:
+      - $ref: '#/components/parameters/MissionId'
+    get:
+      summary: Read an authorized mission
+      responses:
+        '200':
+          description: Mission projection
+          headers:
+            ETag:
+              schema: { type: string }
+        '404': { $ref: '#/components/responses/ApiError' }
+  /v1/missions/{missionId}/quote:
+    parameters:
+      - $ref: '#/components/parameters/MissionId'
+    post:
+      summary: Calculate and attach a trusted quote
+      description: Client cannot submit pricing values. Quote is calculated by the injected server-side pricing policy.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200': { description: Quote attached; returns updated mission projection }
+        '400': { $ref: '#/components/responses/ApiError' }
+        '403': { $ref: '#/components/responses/ApiError' }
+        '409': { $ref: '#/components/responses/ApiError' }
+  /v1/missions/{missionId}/publish:
+    parameters:
+      - $ref: '#/components/parameters/MissionId'
+    post:
+      summary: Publish a quoted mission
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200': { description: Mission published; returns updated mission projection }
+        '403': { $ref: '#/components/responses/ApiError' }
+        '409': { $ref: '#/components/responses/ApiError' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Documentation placeholder; verifier implementation is deployment-specific and not yet configured.
+  parameters:
+    MissionId:
+      name: missionId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, minLength: 16, maxLength: 128 }
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Expected mission version as an entity tag.
+      schema: { type: string }
+  schemas:
+    Address:
+      type: object
+      required: [countryCode, locality, addressLine]
+      properties:
+        countryCode: { type: string, pattern: '^[A-Z]{2}$' }
+        locality: { type: string, minLength: 1 }
+        addressLine: { type: string, minLength: 1 }
+        latitude: { type: number, minimum: -90, maximum: 90 }
+        longitude: { type: number, minimum: -180, maximum: 180 }
+    MissionTerms:
+      type: object
+      required: [category, description, currency, declaredValueMinor, weightGrams, pickup, destination, requiredCapabilities]
+      properties:
+        category:
+          type: string
+          enum: [document, parcel, retail_collection, other]
+        description: { type: string, minLength: 3, maxLength: 2000 }
+        currency: { type: string, pattern: '^[A-Z]{3}$' }
+        declaredValueMinor: { type: integer, minimum: 0 }
+        weightGrams: { type: integer, minimum: 0 }
+        pickup: { $ref: '#/components/schemas/Address' }
+        destination: { $ref: '#/components/schemas/Address' }
+        requiredCapabilities:
+          type: array
+          items: { type: string, maxLength: 80 }
+        requiredVehicleClass:
+          type: string
+          enum: [foot, bicycle, motorcycle, car, van]
+    ApiError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, requestId]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            requestId: { type: string }
+  responses:
+    ApiError:
+      description: Structured API error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
