@@ -328,6 +328,61 @@ class PostgresExecutionTransaction implements ExecutionTransaction {
 }
 
 
+export function createPostgresExecutionRepository(pool:ExecutionPgPool):ExecutionRepository{
+  return {async transaction<T>(work:(tx:ExecutionTransaction)=>Promise<T>):Promise<T>{
+    const client=await pool.connect();
+    try{
+      await client.query("begin");
+      const result=await work(new PostgresExecutionTransaction(client));
+      await client.query("commit");
+      return result;
+    }catch(error){
+      try{await client.query("rollback");}catch{/* preserve original error */}
+      throw error;
+    }finally{client.release();}
+  }};
+}
+
+export function createPostgresOutboxStore(pool:ExecutionPgPool):OutboxStore{
+  return {
+    async claimBatch(input){
+      const client=await pool.connect();
+      try{
+        await client.query("begin");
+        const q=await client.query<{id:string;aggregate_id:string;event_type:string;payload:Record<string,unknown>;attempts:number}>(
+          `with claimed as (
+            select id from public.transactional_outbox
+            where published_at is null and dead_lettered_at is null and available_at<=$1
+              and (lease_until is null or lease_until<=$1)
+            order by available_at,created_at limit $2 for update skip locked
+          ) update public.transactional_outbox o
+            set lease_until=$1::timestamptz+($3::text||' seconds')::interval,attempts=o.attempts+1
+            from claimed where o.id=claimed.id
+            returning o.id,o.aggregate_id,o.event_type,o.payload,o.attempts`,
+          [input.now,input.limit,input.leaseSeconds]);
+        await client.query("commit");
+        return q.rows.map(row=>({id:row.id,aggregateId:row.aggregate_id,eventType:row.event_type,
+          payload:row.payload,attempts:Number(row.attempts)}));
+      }catch(error){
+        try{await client.query("rollback");}catch{/* preserve original error */}
+        throw error;
+      }finally{client.release();}
+    },
+    async markPublished(input){
+      await pool.query(`update public.transactional_outbox set published_at=$2,lease_until=null
+        where id=$1 and published_at is null`,[input.id,input.publishedAt]);
+    },
+    async scheduleRetry(input){
+      await pool.query(`update public.transactional_outbox set available_at=$2,last_error_code=$3,lease_until=null
+        where id=$1 and published_at is null and dead_lettered_at is null`,[input.id,input.availableAt,input.errorCode]);
+    },
+    async moveToDeadLetter(input){
+      await pool.query(`update public.transactional_outbox set dead_lettered_at=$2,last_error_code=$3,lease_until=null
+        where id=$1 and published_at is null`,[input.id,input.failedAt,input.errorCode]);
+    },
+  };
+}
+
 export function createPostgresDispatchRepository(pool:ExecutionPgPool):DispatchRepository {
   const repository=createPostgresExecutionRepository(pool);
   return {transaction:<T>(work:(tx:import("./dispatch.ts").DispatchTransaction)=>Promise<T>) =>
