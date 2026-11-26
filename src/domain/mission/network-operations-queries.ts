@@ -53,6 +53,22 @@ export interface MissionTrackingView {
   readonly legs: readonly MissionTrackingLeg[];
   readonly events: readonly { readonly sequence: number; readonly type: string; readonly occurredAt: string }[];
 }
+export interface IncidentQueueItem {
+  readonly incidentId: string;
+  readonly missionId: string;
+  readonly legId: string | null;
+  readonly category: string;
+  readonly severity: string;
+  readonly status: string;
+  readonly title: string;
+  readonly description: string;
+  readonly reporterRole: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly version: number;
+  readonly assignedOperatorId: string | null;
+  readonly evidenceRefs: readonly string[];
+}
 export interface DispatcherQueueItem {
   readonly missionId: string;
   readonly missionStatus: string;
@@ -191,6 +207,29 @@ export class PostgresNetworkOperationsQueries {
         sequence: Number(event.sequence), type: event.event_type, occurredAt: asIso(event.occurred_at)!,
       })).reverse(),
     };
+  }
+
+  async getIncidentQueue(input: {
+    readonly principal: OperationsPrincipal;
+    readonly now: string;
+    readonly limit?: number;
+  }): Promise<readonly IncidentQueueItem[]> {
+    if (input.principal.role !== "trust_operator") throw new Error("Trust operator role required");
+    const limit = input.limit ?? 100;
+    if (!input.principal.actorId || !Number.isFinite(Date.parse(input.now)) ||
+        !Number.isSafeInteger(limit) || limit < 1 || limit > 250) throw new Error("Invalid incident queue query");
+    const result = await this.pool.query<RawRow>(`select id as incident_id,mission_id,leg_id,category,severity,status,
+      title,description,reporter_role,created_at,updated_at,version,assigned_operator_id,evidence_refs
+      from public.mission_incidents
+      where status in ('open','triaged','investigating')
+      order by case severity when 'critical' then 0 when 'high' then 1 when 'medium' then 2 else 3 end,
+        created_at asc limit $1`,[limit]);
+    return result.rows.map(row => ({
+      incidentId:row.incident_id,missionId:row.mission_id,legId:row.leg_id,
+      category:row.category,severity:row.severity,status:row.status,title:row.title,description:row.description,
+      reporterRole:row.reporter_role,createdAt:asIso(row.created_at)!,updatedAt:asIso(row.updated_at)!,
+      version:Number(row.version),assignedOperatorId:row.assigned_operator_id,evidenceRefs:row.evidence_refs??[],
+    }));
   }
 
   async getDispatcherQueue(input: {
