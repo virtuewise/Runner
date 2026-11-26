@@ -128,7 +128,9 @@ test("mission API prices and publishes with optimistic version checks", async ()
   const created = await api(post("/v1/missions", { terms: validTerms }));
   const createdBody = await created.json();
   const missionId = createdBody.data.id;
-  const quote = await api(post(`/v1/missions/${missionId}/quote`, {}, "mission-quote-key-0001", { "if-match": '"1"' }));
+  const quoteRequest = post(`/v1/missions/${missionId}/quote`, {}, "mission-quote-key-0001", { "if-match": '"1"' });
+  assert.equal(quoteRequest.headers.get("if-match"), '"1"');
+  const quote = await api(quoteRequest);
   const quoteBody = await quote.json();
   assert.equal(quote.status, 200);
   assert.equal(quoteBody.data.status, "quoted");
