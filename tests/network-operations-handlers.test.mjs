@@ -7,7 +7,7 @@ function fixture(principal) {
   const calls=[];
   const handlers=createNetworkOperationsHandlers({
     async authenticate(){return principal;},
-    availabilityRepository:{async recordLocation(){return "recorded";},async setLocationSharing(){},async setAvailability(input){calls.push(["availability",input.runnerId,input.window.status]);}},
+    availabilityRepository:{async recordLocation(){return "recorded";},async getLocationSharing(){calls.push("consent-read");return true;},async setLocationSharing(input){calls.push(["consent-write",input.runnerId,input.enabled]);},async setAvailability(input){calls.push(["availability",input.runnerId,input.window.status]);}},
     incidentRepository:{async transaction(work){return work({
       async createIncident(input){calls.push(["incident-report",input.actor.actorId]);return {incident:{
         id:input.id,missionId:input.missionId,legId:input.legId,reporterId:input.actor.actorId,reporterRole:input.actor.role,
@@ -148,4 +148,15 @@ test("incident queue is restricted to trust operators",async()=>{
   const ok=await allowed.handlers.incidentQueue(new Request("https://runner.test/operations/incidents?limit=20"));
   assert.equal(ok.status,200);
   assert.deepEqual(allowed.calls,[["incident-queue","trust",20]]);
+});
+
+test("Runner can read and change only their own active-mission location consent",async()=>{
+  const {handlers,calls}=fixture({actorId:"authenticated-runner",role:"runner"});
+  const read=await handlers.runnerLocationSharing(new Request("https://runner.test/location-sharing"));
+  assert.equal(read.status,200);
+  const write=await handlers.runnerLocationSharing(new Request("https://runner.test/location-sharing",{
+    method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({enabled:false,runnerId:"attacker"}),
+  }));
+  assert.equal(write.status,200);
+  assert.deepEqual(calls,["consent-read",["consent-write","authenticated-runner",false]]);
 });
