@@ -188,7 +188,7 @@ class PostgresExecutionTransaction implements ExecutionTransaction {
       from expired where o.id=expired.id returning o.*`,[now,limit]);
     return q.rows.map(offerFromRow);
   }
-  async invalidateOffersForLeg(input:{legId:string;now:string;reason:string;actorId:string}):Promise<number>{
+  async invalidateOffersForLeg(input:{legId:string;now:string;reason:string;actorId:string;actorRole:"dispatcher"|"trust_operator"}):Promise<number>{
     const pending=await this.client.query<OfferRow>(`select * from public.dispatch_offers
       where leg_id=$1 and status in ('offered','accepted') for update`,[input.legId]);
     await this.client.query(`update public.dispatch_offers set status='revoked',responded_at=$2,version=version+1
@@ -196,18 +196,18 @@ class PostgresExecutionTransaction implements ExecutionTransaction {
     await this.client.query(`update public.mission_legs set assigned_runner_id=null,status='open',
       sequence_version=sequence_version+1,updated_at=$2 where id=$1 and status='assigned'`,[input.legId,input.now]);
     for(const row of pending.rows) await this.recordOfferEvent({offer:{...offerFromRow(row),status:"revoked",
-      version:Number(row.version)+1},actorId:input.actorId,actorRole:"dispatcher",eventType:"dispatch.offer_revoked",
+      version:Number(row.version)+1},actorId:input.actorId,actorRole:input.actorRole,eventType:"dispatch.offer_revoked",
       reason:input.reason,occurredAt:input.now,idempotencyKey:"revoke:"+row.id});
     return pending.rows.length;
   }
-  async invalidateCustodyForLeg(input:{legId:string;now:string;actorId:string}):Promise<number>{
+  async invalidateCustodyForLeg(input:{legId:string;now:string;actorId:string;actorRole:"dispatcher"|"trust_operator"}):Promise<number>{
     const pending=await this.client.query<{challenge_id:string;mission_id:string}>(`select challenge_id,mission_id
       from public.custody_handovers where (from_leg_id=$1 or to_leg_id=$1)
         and status='initiated' and invalidated_at is null for update`,[input.legId]);
     await this.client.query(`update public.custody_handovers set status='rejected',invalidated_at=$2,version=version+1
       where (from_leg_id=$1 or to_leg_id=$1) and status='initiated' and invalidated_at is null`,[input.legId,input.now]);
     for(const row of pending.rows) await this.insertMissionEvent({missionId:row.mission_id,actorId:input.actorId,
-      actorRole:"trust_operator",type:"custody.challenge_invalidated",occurredAt:input.now,
+      actorRole:input.actorRole,type:"custody.challenge_invalidated",occurredAt:input.now,
       idempotencyKey:"invalidate:"+row.challenge_id,metadata:{challengeId:row.challenge_id,legId:input.legId}});
     return pending.rows.length;
   }
@@ -258,43 +258,13 @@ class PostgresExecutionTransaction implements ExecutionTransaction {
   async appendCustodyEvent(input:{challengeId:string;missionId:string;legId:string;actorId:string;
     type:"custody.challenge_issued"|"custody.release_confirmed"|"custody.receive_confirmed"|"custody.handover_confirmed"|"custody.challenge_invalidated";
     occurredAt:string}):Promise<void>{
+    const role=await this.client.query<{actor_role:"requester"|"runner"|"system"}>(`select case
+      when m.requester_id=$2 then 'requester'
+      when exists(select 1 from public.runner_profiles rp where rp.runner_id=$2) then 'runner'
+      else 'system' end as actor_role from public.missions m where m.id=$1`,[input.missionId,input.actorId]);
     await this.insertMissionEvent({missionId:input.missionId,actorId:input.actorId,
-      actorRole:"runner",type:input.type,occurredAt:input.occurredAt,idempotencyKey:input.type+":"+input.challengeId,
-      metadata:{challengeId:input.challengeId,legId:input.legId}});
+      actorRole:role.rows[0]?.actor_role??"system",type:input.type,occurredAt:input.occurredAt,
+      idempotencyKey:input.type+":"+input.challengeId,metadata:{challengeId:input.challengeId,legId:input.legId}});
   }
 }
 
-export function createPostgresExecutionRepository(pool:ExecutionPgPool):ExecutionRepository{
-  return {async transaction<T>(work:(tx:ExecutionTransaction)=>Promise<T>):Promise<T>{
-    const client=await pool.connect();
-    try{await client.query("begin");const result=await work(new PostgresExecutionTransaction(client));await client.query("commit");return result;}
-    catch(error){try{await client.query("rollback");}catch{/* retain root error */}throw error;}
-    finally{client.release();}
-  }};
-}
-
-export function createPostgresOutboxStore(pool:ExecutionPgPool):OutboxStore{
-  return {
-    async claimBatch(input){
-      const client=await pool.connect();
-      try{await client.query("begin");
-        const q=await client.query<{id:string;aggregate_id:string;event_type:string;payload:Record<string,unknown>;attempts:number}>(
-          `with claimed as (select id from public.transactional_outbox
-            where published_at is null and dead_lettered_at is null and available_at<=$1
-              and (lease_until is null or lease_until<=$1)
-            order by available_at,created_at for update skip locked limit $2)
-           update public.transactional_outbox o set lease_until=$1::timestamptz+($3::text||' seconds')::interval,
-             attempts=o.attempts+1 from claimed where o.id=claimed.id returning o.id,o.aggregate_id,o.event_type,o.payload,o.attempts`,
-          [input.now,input.limit,input.leaseSeconds]);
-        await client.query("commit");
-        return q.rows.map(row=>({id:row.id,aggregateId:row.aggregate_id,eventType:row.event_type,payload:row.payload,attempts:Number(row.attempts)}));
-      }catch(error){try{await client.query("rollback");}catch{}throw error;}finally{client.release();}
-    },
-    async markPublished(input){await pool.query(`update public.transactional_outbox set published_at=$2,lease_until=null
-      where id=$1 and published_at is null`,[input.id,input.publishedAt]);},
-    async scheduleRetry(input){await pool.query(`update public.transactional_outbox set available_at=$2,last_error_code=$3,
-      lease_until=null where id=$1 and published_at is null and dead_lettered_at is null`,[input.id,input.availableAt,input.errorCode]);},
-    async moveToDeadLetter(input){await pool.query(`update public.transactional_outbox set dead_lettered_at=$2,
-      last_error_code=$3,lease_until=null where id=$1 and published_at is null`,[input.id,input.failedAt,input.errorCode]);},
-  };
-}
