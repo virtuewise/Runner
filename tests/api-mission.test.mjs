@@ -55,6 +55,7 @@ function fixture() {
       quoteValidityMinutes: 15,
     }),
     estimateDistanceMetres: async () => 12000,
+    screenManifest: async () => true,
     pricingServiceActorId: "22222222-2222-4222-8222-222222222222",
     now: () => "2026-11-26T00:00:00.000Z",
     newId: () => `33333333-3333-4333-8333-${String(++id).padStart(12, "0")}`,
@@ -76,6 +77,7 @@ test("mission API rejects unauthenticated requests", async () => {
     authenticate: async () => null,
     pricingPolicy: () => { throw new Error("unused"); },
     estimateDistanceMetres: async () => 0,
+    screenManifest: async () => true,
     pricingServiceActorId: "22222222-2222-4222-8222-222222222222",
   });
   const response = await unauthenticated(new Request("https://runner.test/v1/missions", { method: "POST" }));
@@ -106,12 +108,17 @@ test("mission API replays an identical idempotent create request", async () => {
   assert.equal(events.length, 1);
 });
 
-test("mission API rejects client attempts to set trusted screening state", async () => {
-  const { api, missions } = fixture();
-  const response = await api(post("/v1/missions", {
-    terms: { ...validTerms, prohibitedItemScreeningPassed: false },
-  }));
-  assert.equal(response.status, 201);
-  const mission = [...missions.values()][0];
-  assert.equal(mission.terms.prohibitedItemScreeningPassed, true);
+test("mission API refuses manifests rejected by server-side screening", async () => {
+  const { api: unused, ...fixtureState } = fixture();
+  const repository = { unitOfWork: { run: async () => { throw new Error("screening must stop before persistence"); } } };
+  const api = createMissionApi({
+    repository,
+    authenticate: async () => requester,
+    pricingPolicy: () => { throw new Error("unused"); },
+    estimateDistanceMetres: async () => 0,
+    screenManifest: async () => false,
+    pricingServiceActorId: "22222222-2222-4222-8222-222222222222",
+  });
+  const response = await api(post("/v1/missions", { terms: validTerms }));
+  assert.equal(response.status, 422);
 });
