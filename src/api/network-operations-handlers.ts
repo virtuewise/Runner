@@ -1,5 +1,5 @@
 import { acceptDispatchOffer, declineDispatchOffer } from "../domain/mission/dispatch-lifecycle.ts";
-import { updateRunnerAvailability } from "../domain/mission/network-operations.ts";
+import { setRunnerLocationSharing, updateRunnerAvailability } from "../domain/mission/network-operations.ts";
 import type { NetworkOperationsRepository, RunnerAvailabilityInput } from "../domain/mission/network-operations.ts";
 import { placeMissionSafetyHold, reportMissionIncident, transitionMissionIncident } from "../domain/mission/incident-management.ts";
 import type { IncidentRepository, IncidentCategory, IncidentSeverity, IncidentStatus } from "../domain/mission/incident-management.ts";
@@ -102,6 +102,26 @@ export function createNetworkOperationsHandlers(deps: NetworkOperationsHandlerDe
       });
       return result.ok ? json({placed:true,replayed:result.replayed===true}) :
         json({error:result.reason},result.reason==="FORBIDDEN"?403:result.reason==="NOT_FOUND"?404:409);
+    },
+
+    async runnerLocationSharing(request: Request): Promise<Response> {
+      const principal = await deps.authenticate(request);
+      if (!principal) return unauthenticated();
+      if (principal.role !== "runner") return forbidden();
+      if (request.method === "GET") {
+        const enabled = await deps.availabilityRepository.getLocationSharing(principal.actorId);
+        return json({purpose:"active_mission",enabled});
+      }
+      if (request.method !== "POST") return methodNotAllowed();
+      let body: unknown;
+      try { body = await request.json(); } catch { return invalidRequest(); }
+      if (!body || typeof body !== "object" || Array.isArray(body) ||
+          typeof (body as Record<string,unknown>).enabled !== "boolean") return invalidRequest();
+      const enabled = (body as Record<string,unknown>).enabled as boolean;
+      await setRunnerLocationSharing({
+        repository:deps.availabilityRepository,authenticatedRunnerId:principal.actorId,enabled,now:deps.now(),
+      });
+      return json({purpose:"active_mission",enabled});
     },
 
     async runnerAvailability(request: Request): Promise<Response> {
