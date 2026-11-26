@@ -76,8 +76,10 @@ class PostgresExecutionTransaction implements ExecutionTransaction {
   async findCandidates(leg:DispatchLeg,limit:number):Promise<readonly string[]>{
     const q=await this.client.query<{runner_id:string}>(`select rp.runner_id from public.runner_profiles rp
       where rp.identity_status='verified' and rp.qualification_status='qualified' and rp.is_active
-      and rp.max_active_legs > (select count(*) from public.mission_legs active
-        where active.assigned_runner_id=rp.runner_id and active.status not in ('delivered','cancelled','failed'))
+      and rp.max_active_legs > ((select count(*) from public.mission_legs active
+        where active.assigned_runner_id=rp.runner_id and active.status not in ('delivered','cancelled','failed')) +
+        (select count(*) from public.dispatch_offers pending where pending.runner_id=rp.runner_id
+          and pending.status='offered' and pending.expires_at>$1::timestamptz))
       and exists(select 1 from public.runner_availability_windows aw where aw.runner_id=rp.runner_id
         and aw.status='available' and aw.available_from <= $2 and aw.available_until >= $3)
       and not exists(select 1 from unnest($4::text[]) required(code)
@@ -88,8 +90,10 @@ class PostgresExecutionTransaction implements ExecutionTransaction {
       and exists(select 1 from public.runner_jurisdictions rj where rj.runner_id=rp.runner_id
         and rj.country_code=$6 and rj.status='approved')
       and ($7::text is null or rp.vehicle_class=$7)
-      order by (select count(*) from public.mission_legs active where active.assigned_runner_id=rp.runner_id
-        and active.status not in ('delivered','cancelled','failed')),rp.created_at
+      order by ((select count(*) from public.mission_legs active where active.assigned_runner_id=rp.runner_id
+        and active.status not in ('delivered','cancelled','failed')) +
+        (select count(*) from public.dispatch_offers pending where pending.runner_id=rp.runner_id
+          and pending.status='offered' and pending.expires_at>$1::timestamptz)),rp.created_at
       limit $8`,[this.currentNow,leg.serviceWindowStart,leg.serviceWindowEnd,leg.requiredCapabilities,
         leg.originCountry,leg.destinationCountry,leg.requiredVehicleClass??null,limit]);
     return q.rows.map(x=>x.runner_id);
@@ -138,14 +142,37 @@ class PostgresExecutionTransaction implements ExecutionTransaction {
     return q.rows[0]?offerFromRow(q.rows[0]):null;
   }
   async acceptOffer(input:{offerId:string;runnerId:string;now:string;expectedVersion:number}):Promise<boolean>{
-    const q=await this.client.query(`update public.dispatch_offers set status='accepted',responded_at=$1,version=version+1
-      where id=$2 and runner_id=$3 and status='offered' and expires_at>$1 and version=$4 returning leg_id`,
+    const eligible=await this.client.query<{runner_id:string}>(`select rp.runner_id from public.runner_profiles rp
+      join public.dispatch_offers o on o.runner_id=rp.runner_id
+      join public.mission_legs l on l.id=o.leg_id
+      join public.missions m on m.id=l.mission_id
+      where o.id=$1 and o.runner_id=$2 and o.status='offered' and o.expires_at>$3
+        and rp.identity_status='verified' and rp.qualification_status='qualified' and rp.is_active
+        and rp.max_active_legs > (select count(*) from public.mission_legs active
+          where active.assigned_runner_id=rp.runner_id and active.status not in ('delivered','cancelled','failed'))
+        and (m.manifest->>'requiredVehicleClass' is null or m.manifest->>'requiredVehicleClass'=rp.vehicle_class)
+        and not exists(select 1 from jsonb_array_elements_text(coalesce(m.manifest->'requiredCapabilities','[]'::jsonb)) required(code)
+          where not exists(select 1 from public.runner_capabilities rc where rc.runner_id=rp.runner_id
+            and rc.capability_code=required.code and rc.status='verified'
+            and (rc.valid_until is null or rc.valid_until>$3::timestamptz)))
+        and exists(select 1 from public.runner_jurisdictions rj where rj.runner_id=rp.runner_id
+          and rj.country_code=l.origin->>'countryCode' and rj.status='approved')
+        and exists(select 1 from public.runner_jurisdictions rj where rj.runner_id=rp.runner_id
+          and rj.country_code=l.destination->>'countryCode' and rj.status='approved')
+        and exists(select 1 from public.runner_availability_windows aw where aw.runner_id=rp.runner_id
+          and aw.status='available' and aw.available_from<=l.service_window_start
+          and aw.available_until>=l.service_window_end)
+      for update of rp`,[input.offerId,input.runnerId,input.now]);
+    if(!eligible.rows.length)return false;
+    const assigned=await this.client.query<{id:string}>(`update public.mission_legs l set status='assigned',
+      assigned_runner_id=$1,sequence_version=sequence_version+1,updated_at=$2
+      from public.dispatch_offers o where o.id=$3 and o.leg_id=l.id and l.status='open'
+      returning l.id`,[input.runnerId,input.now,input.offerId]);
+    if(!assigned.rows.length)return false;
+    const accepted=await this.client.query(`update public.dispatch_offers set status='accepted',responded_at=$1,version=version+1
+      where id=$2 and runner_id=$3 and status='offered' and expires_at>$1 and version=$4 returning id`,
       [input.now,input.offerId,input.runnerId,input.expectedVersion]);
-    if(!q.rows.length)return false;
-    const leg=await this.client.query(`update public.mission_legs set status='assigned',assigned_runner_id=$1,
-      sequence_version=sequence_version+1,updated_at=$2 where id=$3 and status='open' returning id`,
-      [input.runnerId,input.now,(q.rows[0] as {leg_id:string}).leg_id]);
-    if(!leg.rows.length)throw new Error("Dispatch leg is no longer assignable");
+    if(accepted.rows.length!==1)throw new Error("Offer acceptance lost its locked version; transaction must roll back");
     return true;
   }
   async declineOffer(input:{offerId:string;runnerId:string;now:string;expectedVersion:number}):Promise<boolean>{
@@ -161,17 +188,28 @@ class PostgresExecutionTransaction implements ExecutionTransaction {
       from expired where o.id=expired.id returning o.*`,[now,limit]);
     return q.rows.map(offerFromRow);
   }
-  async invalidateOffersForLeg(input:{legId:string;now:string;reason:string}):Promise<number>{
-    const q=await this.client.query(`update public.dispatch_offers set status='revoked',responded_at=$2,version=version+1
+  async invalidateOffersForLeg(input:{legId:string;now:string;reason:string;actorId:string}):Promise<number>{
+    const pending=await this.client.query<OfferRow>(`select * from public.dispatch_offers
+      where leg_id=$1 and status in ('offered','accepted') for update`,[input.legId]);
+    await this.client.query(`update public.dispatch_offers set status='revoked',responded_at=$2,version=version+1
       where leg_id=$1 and status in ('offered','accepted')`,[input.legId,input.now]);
     await this.client.query(`update public.mission_legs set assigned_runner_id=null,status='open',
       sequence_version=sequence_version+1,updated_at=$2 where id=$1 and status='assigned'`,[input.legId,input.now]);
-    return q.rowCount??0;
+    for(const row of pending.rows) await this.recordOfferEvent({offer:{...offerFromRow(row),status:"revoked",
+      version:Number(row.version)+1},actorId:input.actorId,actorRole:"dispatcher",eventType:"dispatch.offer_revoked",
+      reason:input.reason,occurredAt:input.now,idempotencyKey:"revoke:"+row.id});
+    return pending.rows.length;
   }
-  async invalidateCustodyForLeg(input:{legId:string;now:string}):Promise<number>{
-    const q=await this.client.query(`update public.custody_handovers set status='rejected',invalidated_at=$2,version=version+1
+  async invalidateCustodyForLeg(input:{legId:string;now:string;actorId:string}):Promise<number>{
+    const pending=await this.client.query<{challenge_id:string;mission_id:string}>(`select challenge_id,mission_id
+      from public.custody_handovers where (from_leg_id=$1 or to_leg_id=$1)
+        and status='initiated' and invalidated_at is null for update`,[input.legId]);
+    await this.client.query(`update public.custody_handovers set status='rejected',invalidated_at=$2,version=version+1
       where (from_leg_id=$1 or to_leg_id=$1) and status='initiated' and invalidated_at is null`,[input.legId,input.now]);
-    return q.rowCount??0;
+    for(const row of pending.rows) await this.insertMissionEvent({missionId:row.mission_id,actorId:input.actorId,
+      actorRole:"trust_operator",type:"custody.challenge_invalidated",occurredAt:input.now,
+      idempotencyKey:"invalidate:"+row.challenge_id,metadata:{challengeId:row.challenge_id,legId:input.legId}});
+    return pending.rows.length;
   }
   async recordOfferEvent(input:{offer:DispatchOffer;actorId:string;actorRole:"runner"|"dispatcher"|"system";
     eventType:string;reason:string;occurredAt:string;idempotencyKey:string}):Promise<void>{
@@ -184,6 +222,7 @@ class PostgresExecutionTransaction implements ExecutionTransaction {
   }
   private async insertMissionEvent(input:{missionId:string;actorId:string;actorRole:string;type:string;occurredAt:string;
     idempotencyKey:string;metadata:Record<string,string>}):Promise<void>{
+    await this.client.query("select id from public.missions where id=$1 for update",[input.missionId]);
     await this.client.query(`insert into public.mission_events(event_id,mission_id,sequence,actor_id,actor_role,event_type,
       idempotency_key,from_status,to_status,payload,occurred_at)
       select gen_random_uuid(),m.id,(select coalesce(max(e.sequence),0)+1 from public.mission_events e where e.mission_id=m.id),
