@@ -19,11 +19,12 @@ export interface RunnerAvailabilityInput {
 }
 export interface NetworkOperationsRepository {
   recordLocation(input: { runnerId: string; location: RunnerLocationInput; receivedAt: string; expiresAt: string }): Promise<"recorded" | "stale" | "sharing_disabled">;
+  setLocationSharing(input: { runnerId: string; enabled: boolean; updatedAt: string }): Promise<void>;
   setAvailability(input: { runnerId: string; window: RunnerAvailabilityInput; recordedAt: string }): Promise<void>;
 }
 export type LocationResult =
   | { readonly ok: true; readonly value: { readonly status: "recorded" | "stale" | "sharing_disabled" } }
-  | { readonly ok: false; readonly reason: "INVALID_LOCATION" | "LOCATION_TOO_OLD" | "LOCATION_FROM_FUTURE" | "INVALID_SEQUENCE" };
+  | { readonly ok: false; readonly reason: "INVALID_LOCATION" | "LOCATION_TOO_OLD" | "LOCATION_FROM_FUTURE" };
 const MAX_LOCATION_AGE_MS = 5 * 60_000;
 const MAX_FUTURE_SKEW_MS = 2 * 60_000;
 const MAX_ACCURACY_METRES = 100;
@@ -63,6 +64,19 @@ export async function ingestRunnerLocation(input: {
   });
   return { ok: true, value: { status: result } };
 }
+export async function setRunnerLocationSharing(input: {
+  repository: NetworkOperationsRepository;
+  authenticatedRunnerId: string;
+  enabled: boolean;
+  now: string;
+}): Promise<void> {
+  if (!Number.isFinite(Date.parse(input.now))) throw new Error("Invalid timestamp");
+  await input.repository.setLocationSharing({
+    runnerId: input.authenticatedRunnerId,
+    enabled: input.enabled,
+    updatedAt: new Date(input.now).toISOString(),
+  });
+}
 export async function updateRunnerAvailability(input: {
   repository: NetworkOperationsRepository;
   authenticatedRunnerId: string;
@@ -73,6 +87,7 @@ export async function updateRunnerAvailability(input: {
   const end = Date.parse(input.window.availableUntil);
   const now = Date.parse(input.now);
   if (!Number.isFinite(start) || !Number.isFinite(end) || !Number.isFinite(now) ||
+      (input.window.status !== "available" && input.window.status !== "unavailable") ||
       end <= start || start < now - 60_000 || end - start > 31 * 24 * 60 * 60_000) {
     return { ok: false, reason: "INVALID_WINDOW" };
   }
