@@ -1,6 +1,8 @@
 import type { DispatchLeg, DispatchOffer, DispatchRunner } from "./dispatch.ts";
 import type { CustodyChallenge } from "./custody.ts";
 import type { ExecutionRepository, ExecutionTransaction } from "./execution-persistence.ts";
+import type { DispatchRepository } from "./dispatch.ts";
+import type { CustodyRepository } from "./custody.ts";
 import type { OutboxMessage, OutboxStore } from "./outbox-worker.ts";
 
 interface QueryResult<Row> { readonly rows: readonly Row[]; readonly rowCount: number | null; }
@@ -268,3 +270,14 @@ class PostgresExecutionTransaction implements ExecutionTransaction {
   }
 }
 
+
+export function createPostgresDispatchRepository(pool:ExecutionPgPool):DispatchRepository {
+  const repository=createPostgresExecutionRepository(pool);
+  return {transaction:<T>(work:(tx:import("./dispatch.ts").DispatchTransaction)=>Promise<T>) =>
+    repository.transaction((tx)=>work(tx))};
+}
+export function createPostgresCustodyRepository(pool:ExecutionPgPool):CustodyRepository {
+  const repository=createPostgresExecutionRepository(pool);
+  return {transaction:<T>(work:(tx:import("./custody.ts").CustodyTransaction)=>Promise<T>) =>
+    repository.transaction((tx)=>work(tx))};
+}
