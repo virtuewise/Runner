@@ -13,3 +13,4 @@ Accepted decisions are historical; supersede rather than rewrite.
 Use TEMPLATE.md. Number sequentially and record status, date, owners, context, decision, alternatives, consequences, security and operational impact, review triggers.
 - [ADR-0008: Purpose-limited, consented Runner location ingestion](0008-consented-live-location.md)
 - [ADR-0009: Authenticated operational read models and Fetch API handlers](0009-operations-read-models-and-api-boundary.md)
+- [ADR-0010: Audited incident management and safety holds](0010-incident-management-and-safety-holds.md)
