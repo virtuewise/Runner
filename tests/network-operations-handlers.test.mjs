@@ -31,6 +31,7 @@ function fixture(principal) {
       async getRunnerOfferInbox(input){calls.push(["inbox",input.authenticatedRunnerId]);return [];},
       async getMissionTracking(input){calls.push(["tracking",input.principal.actorId]);return {missionId:input.missionId};},
       async getDispatcherQueue(input){calls.push(["queue",input.principal.actorId,input.limit]);return [];},
+      async getIncidentQueue(input){calls.push(["incident-queue",input.principal.actorId,input.limit]);return [];},
     },
     now:()=>now,
   });
@@ -137,4 +138,14 @@ test("trust operator can place a mission safety hold through the authenticated b
   }));
   assert.equal(response.status,200);
   assert.deepEqual(calls,[["safety-hold","trust-operator"]]);
+});
+
+test("incident queue is restricted to trust operators",async()=>{
+  const denied=fixture({actorId:"dispatcher",role:"dispatcher"});
+  const response=await denied.handlers.incidentQueue(new Request("https://runner.test/operations/incidents"));
+  assert.equal(response.status,403);assert.equal(denied.calls.length,0);
+  const allowed=fixture({actorId:"trust",role:"trust_operator"});
+  const ok=await allowed.handlers.incidentQueue(new Request("https://runner.test/operations/incidents?limit=20"));
+  assert.equal(ok.status,200);
+  assert.deepEqual(allowed.calls,[["incident-queue","trust",20]]);
 });
