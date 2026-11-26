@@ -79,6 +79,13 @@ class PostgresMissionTransaction implements MissionTransaction {
     );
   }
 
+  async loadMission(missionId: string): Promise<Mission | null> {
+    const result = await this.client.query<MissionRow>(
+      "select * from public.missions where id = $1", [missionId],
+    );
+    return result.rows[0] ? missionFromRow(result.rows[0]) : null;
+  }
+
   async loadMissionForUpdate(missionId: string): Promise<Mission | null> {
     const result = await this.client.query<MissionRow>(
       "select * from public.missions where id = $1 for update", [missionId],
