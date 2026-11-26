@@ -81,12 +81,12 @@ export function createCustodyHandlers(deps: CustodyHandlerDependencies) {
       if (!challengeId || challengeId.length > 128) return invalid();
       let body: unknown;
       try { body = await request.json(); } catch { return invalid(); }
-      if (!body || typeof body !== "object" || Array.isArray(body) ||
-          typeof (body as Record<string, unknown>).token !== "string" ||
-          ((body as Record<string, unknown>).token as string).length > 512) return invalid();
+      if (!body || typeof body !== "object" || Array.isArray(body)) return invalid();
+      const token = (body as Record<string, unknown>).token;
+      if (typeof token !== "string" || token.length > 512) return invalid();
       const result = await confirmCustody({
         repository: deps.repository, crypto: deps.crypto, challengeId,
-        actorId: principal.actorId, token: (body as Record<string, string>).token, now: deps.now(),
+        actorId: principal.actorId, token, now: deps.now(),
       });
       if (!result.ok) {
         const status = result.reason === "NOT_FOUND" ? 404 :
