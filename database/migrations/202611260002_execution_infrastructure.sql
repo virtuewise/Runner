@@ -19,9 +19,12 @@ create index runner_availability_lookup_idx
   where status='available';
 
 alter table public.mission_legs
-  add column service_window_start timestamptz not null default now(),
-  add column service_window_end timestamptz not null default (now() + interval '1 hour'),
-  add constraint mission_leg_service_window_valid check (service_window_end > service_window_start);
+  add column service_window_start timestamptz,
+  add column service_window_end timestamptz,
+  add constraint mission_leg_service_window_valid check (
+    (service_window_start is null and service_window_end is null) or
+    (service_window_start is not null and service_window_end is not null and service_window_end > service_window_start)
+  );
 
 alter table public.dispatch_offers
   add column dispatcher_id uuid,
