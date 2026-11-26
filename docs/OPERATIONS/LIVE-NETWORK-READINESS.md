@@ -15,6 +15,15 @@ Status: engineering foundation only; not production-ready.
 - Fetch API handler factories for Runner availability, offer accept/decline, mission tracking and dispatcher queue, with injected authentication and repositories.
 - Unit and ephemeral PostgreSQL integration tests cover the read models and authenticated handler boundaries.
 
+## Incident and dispute foundation
+
+- PostgreSQL incident records with reporter identity/role, category, severity, optimistic version and controlled resolution.
+- Append-only incident event history.
+- Reporter authorization for requester-owned missions and assigned Runner legs.
+- Trust-operator-only incident transitions and mission safety holds.
+- Evidence is represented only by opaque references; raw media and sensitive personal data are not stored in incident metadata.
+- Safety holds update the mission projection and append a mission event in one transaction.
+
 ## Still required before live use
 
 - Production authentication and resource authorization; the API must supply the verified Runner principal.
@@ -23,7 +32,7 @@ Status: engineering foundation only; not production-ready.
 - Location spoofing/plausibility controls, device attestation assessment and abuse monitoring.
 - Rate limits, payload limits, telemetry minimization and security review.
 - Realtime transport, dispatcher UI and read-model freshness/accuracy presentation.
-- Runner mobile UX, dispatcher UI, incident escalation and operational training.
+- Runner mobile UX, dispatcher UI, incident intake/triage console, incident escalation and operational training.
 - POPIA/GDPR legal review for applicable data flows and cross-border processing.
 
 GPS is supporting situational data only. It never proves pickup, transfer or delivery.
