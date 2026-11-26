@@ -218,6 +218,13 @@ class PostgresExecutionTransaction implements ExecutionTransaction {
       idempotencyKey:"invalidate:"+row.challenge_id,metadata:{challengeId:row.challenge_id,legId:input.legId}});
     return pending.rows.length;
   }
+  async hasReassignmentEvent(input:{legId:string;actorId:string;idempotencyKey:string}):Promise<boolean>{
+    const q=await this.client.query<{exists:boolean}>(`select exists(
+      select 1 from public.mission_events e join public.mission_legs l on l.mission_id=e.mission_id
+      where l.id=$1 and e.actor_id=$2 and e.idempotency_key=$3 and e.event_type='dispatch.leg_reassigned'
+    ) as exists`,[input.legId,input.actorId,input.idempotencyKey]);
+    return q.rows[0]?.exists===true;
+  }
   async appendReassignmentEvent(input:{legId:string;actorId:string;actorRole:"dispatcher"|"trust_operator";
     reason:string;occurredAt:string;idempotencyKey:string}):Promise<void>{
     const leg=await this.client.query<{mission_id:string}>(`select mission_id from public.mission_legs where id=$1`,[input.legId]);
