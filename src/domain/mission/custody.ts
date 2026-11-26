@@ -63,6 +63,9 @@ export async function confirmCustody(input: {
     if (Date.parse(challenge.expiresAt) <= now) return { ok: false, reason: "EXPIRED" };
     if (input.actorId !== challenge.releasingActorId && input.actorId !== challenge.receivingActorId)
       return { ok: false, reason: "FORBIDDEN" };
+    if ((input.actorId === challenge.releasingActorId && challenge.releaseConfirmedAt) ||
+        (input.actorId === challenge.receivingActorId && challenge.receiveConfirmedAt))
+      return { ok: false, reason: "REPLAYED" };
     if (!input.crypto.equalDigest(challenge.tokenHash, suppliedHash)) return { ok: false, reason: "INVALID_TOKEN" };
     const next: CustodyChallenge = input.actorId === challenge.releasingActorId
       ? { ...challenge, releaseConfirmedAt: challenge.releaseConfirmedAt ?? input.now, version: challenge.version + 1 }
