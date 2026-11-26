@@ -142,7 +142,7 @@ export function createMissionApi(deps: MissionApiDependencies): (request: Reques
         if (!terms) return fail(400, "INVALID_MISSION_TERMS", "Mission terms are incomplete or invalid.", requestId);
         if (!await deps.screenManifest(terms)) return fail(422, "MANIFEST_SCREENING_REQUIRED", "The manifest has not passed the required item and regulatory screening.", requestId);
         const screenedTerms: MissionTerms = { ...terms, prohibitedItemScreeningPassed: true };
-        return deps.repository.unitOfWork.run(async (tx) => {
+        return await deps.repository.unitOfWork.run(async (tx) => {
           const claim = await tx.claimIdempotency({ actorId: principal.actorId, scope: "mission.create", key, requestHash: hash(raw) });
           if (claim.kind === "replay") return response(claim.responseStatus, claim.responseBody);
           if (claim.kind === "conflict") return fail(409, "IDEMPOTENCY_KEY_REUSED", "This key was already used with a different or incomplete request.", requestId);
@@ -174,7 +174,7 @@ export function createMissionApi(deps: MissionApiDependencies): (request: Reques
         if (raw.length > 4096) return fail(413, "PAYLOAD_TOO_LARGE", "Request exceeds the allowed size.", requestId);
         if (raw.trim() !== "" && raw.trim() !== "{}") return fail(400, "UNEXPECTED_BODY", "This command does not accept client-supplied pricing or state.", requestId);
         const scope = `mission.${action}:${missionId}`;
-        return deps.repository.unitOfWork.run(async (tx) => {
+        return await deps.repository.unitOfWork.run(async (tx) => {
           const claim = await tx.claimIdempotency({ actorId: principal.actorId, scope, key, requestHash: hash(raw) });
           if (claim.kind === "replay") return response(claim.responseStatus, claim.responseBody);
           if (claim.kind === "conflict") return fail(409, "IDEMPOTENCY_KEY_REUSED", "This key was already used with a different or incomplete request.", requestId);
