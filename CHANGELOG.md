@@ -2,7 +2,7 @@
 
 ## Unreleased — Live Network Operations foundation
 
-- Added consent-gated Runner location ingestion and transactional availability windows.
+- Added consent-gated Runner location ingestion, authenticated consent read/enable/withdraw controls and transactional availability windows.
 - Added PostgreSQL Runner availability, offer inbox, mission tracking and dispatcher queue read models.
 - Added authenticated Fetch API handler factories for availability controls, offer responses, mission tracking, dispatcher operations, incident reporting, incident transitions and safety holds.
 - Added transactional incident/dispute persistence, append-only incident events, trust-operator resolution and idempotent mission safety holds.
