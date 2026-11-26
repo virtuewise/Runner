@@ -27,5 +27,5 @@ jobs:
           fi
           npm install --no-audit --no-fund
       - name: Export Android JavaScript bundle
-        if: hashFiles('package.json', 'app.json') != ''
+        if: hashFiles('package.json') != '' && hashFiles('app.json') != ''
         run: npx expo export --platform android
