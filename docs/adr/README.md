@@ -11,3 +11,4 @@ Accepted decisions are historical; supersede rather than rewrite.
 - ADR-0007: Persistent custody challenges and production cryptography.
 
 Use TEMPLATE.md. Number sequentially and record status, date, owners, context, decision, alternatives, consequences, security and operational impact, review triggers.
+- [ADR-0008: Purpose-limited, consented Runner location ingestion](0008-consented-live-location.md)
