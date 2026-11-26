@@ -3,7 +3,7 @@ name: Mission Engine
 on:
   pull_request:
   push:
-    branches: [main, "foundation/**"]
+    branches: [main, "foundation/**", "feature/**"]
 
 permissions:
   contents: read
