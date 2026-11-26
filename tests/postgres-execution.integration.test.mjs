@@ -10,6 +10,8 @@ import { issueCustodyChallenge, confirmCustody, expireCustodyChallenges } from "
 import { productionCustodyCrypto } from "../src/domain/mission/production-custody-crypto.ts";
 import { createPostgresExecutionRepository, createPostgresDispatchRepository, createPostgresCustodyRepository, createPostgresOutboxStore } from "../src/domain/mission/postgres-execution-repository.ts";
 import { processOutboxBatch } from "../src/domain/mission/outbox-worker.ts";
+import { ingestRunnerLocation, setRunnerLocationSharing, updateRunnerAvailability } from "../src/domain/mission/network-operations.ts";
+import { createPostgresNetworkOperationsRepository } from "../src/domain/mission/postgres-network-operations.ts";
 
 const databaseUrl=process.env.DATABASE_URL;
 test("PostgreSQL execution integration: migrations, concurrent dispatch, offer lifecycle, custody and outbox",
@@ -18,7 +20,7 @@ test("PostgreSQL execution integration: migrations, concurrent dispatch, offer l
     const pool=new Pool({connectionString:databaseUrl,max:12});
     const root=resolve(dirname(fileURLToPath(import.meta.url)),"..");
     try {
-      for(const file of ["202611250001_mission_persistence.sql","202611260001_dispatch_custody.sql","202611260002_execution_infrastructure.sql"])
+      for(const file of ["202611250001_mission_persistence.sql","202611260001_dispatch_custody.sql","202611260002_execution_infrastructure.sql","202611260003_live_network_ingestion.sql"])
         await pool.query(await readFile(resolve(root,"database/migrations",file),"utf8"));
 
       const requester=randomUUID(),dispatcher=randomUUID(),runner=randomUUID(),runnerTwo=randomUUID(),mission=randomUUID();
@@ -48,6 +50,28 @@ test("PostgreSQL execution integration: migrations, concurrent dispatch, offer l
         values($1,$2,$3,'car','open',$4::jsonb,$5::jsonb,array['ZA'],$6,$7)`,
         [id,mission,n,JSON.stringify({countryCode:"ZA"}),JSON.stringify({countryCode:"ZA"}),start.toISOString(),end.toISOString()]);
 
+
+      const network=createPostgresNetworkOperationsRepository(pool);
+      await setRunnerLocationSharing({repository:network,authenticatedRunnerId:runner,enabled:true,now:stamp});
+      const location={latitude:-26.2041,longitude:28.0473,accuracyMetres:12,capturedAt:stamp,sequence:1};
+      const locationWrite=await ingestRunnerLocation({repository:network,authenticatedRunnerId:runner,location,now:stamp});
+      assert.deepEqual(locationWrite,{ok:true,value:{status:"recorded"}});
+      const staleLocation=await ingestRunnerLocation({repository:network,authenticatedRunnerId:runner,
+        location:{...location,latitude:-26.2,sequence:1},now:stamp});
+      assert.deepEqual(staleLocation,{ok:true,value:{status:"stale"}});
+      const storedLocation=await pool.query("select latitude,longitude,sequence from public.runner_location_snapshots where runner_id=$1",[runner]);
+      assert.equal(storedLocation.rows[0].latitude,-26.2041,"duplicate or out-of-order device sequences cannot overwrite latest location");
+      await setRunnerLocationSharing({repository:network,authenticatedRunnerId:runner,enabled:false,now:stamp});
+      const withdrawnLocation=await pool.query("select runner_id from public.runner_location_snapshots where runner_id=$1",[runner]);
+      assert.equal(withdrawnLocation.rows.length,0,"withdrawing consent deletes the latest location snapshot");
+      const disabledWrite=await ingestRunnerLocation({repository:network,authenticatedRunnerId:runner,location:{...location,sequence:2},now:stamp});
+      assert.deepEqual(disabledWrite,{ok:true,value:{status:"sharing_disabled"}});
+      const availability=await updateRunnerAvailability({repository:network,authenticatedRunnerId:runner,
+        window:{availableFrom:start.toISOString(),availableUntil:end.toISOString(),status:"unavailable"},now:stamp});
+      assert.deepEqual(availability,{ok:true});
+      const availabilityRows=await pool.query("select status from public.runner_availability_windows where runner_id=$1 and status <> 'cancelled'",[runner]);
+      assert.deepEqual(availabilityRows.rows.map(row=>row.status),["unavailable"],
+        "Runner availability updates replace overlapping availability windows atomically");
 
       const execution=createPostgresExecutionRepository(pool);
       const dispatch=createPostgresDispatchRepository(pool);
