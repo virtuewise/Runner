@@ -28,4 +28,8 @@ jobs:
           npm install --no-audit --no-fund
           npm run build --if-present
           npm run typecheck --if-present
-          npm test
+          if compgen -G "tests/*.test.mjs" > /dev/null; then
+            npm test
+          else
+            echo "No Node test files exist on this ref yet; test execution will activate when the suite is added."
+          fi
