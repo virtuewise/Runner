@@ -70,6 +70,9 @@ export async function reassignDispatchLeg(input: {
   if (!input.legId || !input.actorId || !input.reason.trim() || !input.idempotencyKey || !Number.isFinite(Date.parse(input.now)))
     throw new Error("Invalid reassignment command");
   return input.repository.transaction(async (tx) => {
+    await tx.lockDispatchIdempotency(input.actorId, "reassign:" + input.idempotencyKey);
+    if (await tx.hasReassignmentEvent({ legId: input.legId, actorId: input.actorId, idempotencyKey: input.idempotencyKey }))
+      return { offersRevoked: 0, challengesInvalidated: 0 };
     const offersRevoked = await tx.invalidateOffersForLeg({ legId: input.legId, now: input.now, reason: input.reason, actorId: input.actorId, actorRole: input.actorRole });
     const challengesInvalidated = await tx.invalidateCustodyForLeg({ legId: input.legId, now: input.now, actorId: input.actorId, actorRole: input.actorRole });
     await tx.appendReassignmentEvent({ legId: input.legId, actorId: input.actorId, actorRole: input.actorRole,
