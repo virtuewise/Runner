@@ -16,8 +16,11 @@ export interface DispatchOffer {
   readonly id: string; readonly legId: string; readonly missionId: string; readonly runnerId: string;
   readonly status: "offered" | "accepted" | "declined" | "expired" | "revoked";
   readonly expiresAt: string; readonly createdAt: string; readonly version: number;
+  readonly dispatcherId?: string; readonly idempotencyKey?: string;
 }
 export interface DispatchTransaction {
+  lockDispatchIdempotency(dispatcherId: string, key: string): Promise<void>;
+  findOfferByIdempotencyKey(dispatcherId: string, key: string): Promise<DispatchOffer | null>;
   lockNextOpenLeg(input: { readonly now: string; readonly zone?: string }): Promise<DispatchLeg | null>;
   loadRunner(runnerId: string): Promise<DispatchRunner | null>;
   findCandidates(leg: DispatchLeg, limit: number): Promise<readonly string[]>;
@@ -53,6 +56,9 @@ export async function createDispatchOffer(input: {
       input.policy.offerTtlSeconds > 3600 || !Number.isSafeInteger(input.policy.maxCandidates) ||
       input.policy.maxCandidates < 1 || input.policy.maxCandidates > 100) throw new Error("Invalid dispatch command or policy");
   return input.repository.transaction(async (tx) => {
+    await tx.lockDispatchIdempotency(input.dispatcherId, input.idempotencyKey);
+    const existing = await tx.findOfferByIdempotencyKey(input.dispatcherId, input.idempotencyKey);
+    if (existing) return { ok: true, offer: existing };
     const leg = await tx.lockNextOpenLeg({ now: input.now, ...(input.policy.zone ? { zone: input.policy.zone } : {}) });
     if (!leg) return { ok: false, reason: "NO_OPEN_LEG" };
     const candidates = await tx.findCandidates(leg, input.policy.maxCandidates);
@@ -66,7 +72,7 @@ export async function createDispatchOffer(input: {
       }
       const offer: DispatchOffer = { id: input.offerId, legId: leg.id, missionId: leg.missionId, runnerId,
         status: "offered", expiresAt: new Date(now + input.policy.offerTtlSeconds * 1000).toISOString(),
-        createdAt: input.now, version: 1 };
+        createdAt: input.now, version: 1, dispatcherId: input.dispatcherId, idempotencyKey: input.idempotencyKey };
       await tx.createOffer(offer);
       await tx.appendEvent({ missionId: leg.missionId, legId: leg.id, type: "dispatch.offer_created",
         actorId: input.dispatcherId, reason: "eligible_runner_selected", occurredAt: input.now,

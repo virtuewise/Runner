@@ -12,7 +12,7 @@ function dispatchFixture(override = {}) {
     vehicleClass:"car",approvedJurisdictions:["ZA"],availableFrom:"2026-11-26T09:00:00.000Z",
     availableUntil:"2026-11-26T13:00:00.000Z",activeLegCount:0,capacity:1,...override};
   const repository={async transaction(work){return work({
-    async lockNextOpenLeg(){return leg;},async findCandidates(){return [runner.runnerId];},async loadRunner(){return runner;},
+    async lockDispatchIdempotency(){},async findOfferByIdempotencyKey(){return null;},async lockNextOpenLeg(){return leg;},async findCandidates(){return [runner.runnerId];},async loadRunner(){return runner;},
     async createOffer(o){offers.push(o);},async appendEvent(e){events.push(e);},async enqueueOutbox(e){outbox.push(e);}
   });}};
   return {repository,events,outbox,offers};
@@ -37,6 +37,7 @@ function custodyFixture(){
   const repository={async transaction(work){return work({
     async createChallenge(c){records.set(c.id,c);},async loadChallengeForUpdate(id){return records.get(id)??null;},
     async saveChallenge(c,expected){const old=records.get(c.id);if(!old||old.version!==expected)return false;records.set(c.id,c);return true;},
+    async expireChallenges(){return [];},
     async appendCustodyEvent(e){events.push(e);}
   });}};
   let seq=0;
@@ -48,7 +49,7 @@ function custodyFixture(){
 test("custody completes only after both authenticated parties confirm",async()=>{
   const f=custodyFixture();
   const issued=await issueCustodyChallenge({repository:f.repository,crypto:f.crypto,challengeId:"c1",missionId:"m1",legId:"l1",
-    releasingActorId:"sender",receivingActorId:"receiver",purpose:"relay_handover",now:"2026-11-26T10:00:00.000Z",ttlSeconds:120});
+    releasingActorId:"sender",receivingActorId:"receiver",purpose:"final_delivery",now:"2026-11-26T10:00:00.000Z",ttlSeconds:120});
   assert.equal(issued.ok,true);assert.equal(issued.challenge.tokenHash,"[redacted]");
   const token=issued.plaintextToken;
   const first=await confirmCustody({repository:f.repository,crypto:f.crypto,challengeId:"c1",actorId:"sender",token,now:"2026-11-26T10:00:10.000Z"});
@@ -77,4 +78,5 @@ test("custody rejects expired challenges",async()=>{
   const expired=await confirmCustody({repository:f.repository,crypto:f.crypto,challengeId:"c3",actorId:"sender",
     token:issued.plaintextToken,now:"2026-11-26T10:01:00.000Z"});
   assert.deepEqual(expired,{ok:false,reason:"EXPIRED"});
+  assert.equal(f.records.get("c3").status,"expired");
 });

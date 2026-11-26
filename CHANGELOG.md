@@ -22,3 +22,15 @@
 - Added operational readiness gates and ADRs for dispatch and custody.
 
 This is not a production release: PostgreSQL adapters, offer acceptance/expiry workers, notification delivery, authentication integration and deployed infrastructure remain outstanding.
+
+
+## Unreleased — PostgreSQL execution infrastructure
+
+- Added PostgreSQL-backed dispatch and custody repository adapters.
+- Added authenticated offer acceptance/decline, expiry, reassignment invalidation and dispatcher-scoped idempotency.
+- Added a leased transactional outbox worker with retry and dead-letter handling.
+- Added a production Web Crypto token generator and SHA-256 custody digest adapter.
+- Added PostgreSQL migration and concurrency integration coverage to CI.
+- Added ADR-0006/0007 and an outbox dead-letter runbook.
+
+Not a production release. Provider wiring, production identity integration, supervised workers, load/security testing and operational UAT remain outstanding.
