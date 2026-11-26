@@ -12,6 +12,7 @@ import { createPostgresExecutionRepository, createPostgresDispatchRepository, cr
 import { processOutboxBatch } from "../src/domain/mission/outbox-worker.ts";
 import { ingestRunnerLocation, setRunnerLocationSharing, updateRunnerAvailability } from "../src/domain/mission/network-operations.ts";
 import { createPostgresNetworkOperationsRepository } from "../src/domain/mission/postgres-network-operations.ts";
+import { createPostgresNetworkOperationsQueries } from "../src/domain/mission/network-operations-queries.ts";
 
 const databaseUrl=process.env.DATABASE_URL;
 test("PostgreSQL execution integration: migrations, concurrent dispatch, offer lifecycle, custody and outbox",
@@ -84,6 +85,24 @@ test("PostgreSQL execution integration: migrations, concurrent dispatch, offer l
       assert.equal(attempts.filter(x=>x.ok).length,1,"capacity and row locks must prevent concurrent over-dispatch");
       assert.equal(attempts.filter(x=>!x.ok&&x.reason==="NO_ELIGIBLE_RUNNER").length,1);
       const winning=attempts.find(x=>x.ok).offer;
+      const readModels=createPostgresNetworkOperationsQueries(pool);
+      const inbox=await readModels.getRunnerOfferInbox({authenticatedRunnerId:runner,now:stamp});
+      assert.equal(inbox.length,1,"Runner inbox returns only the authenticated Runner's active offer");
+      assert.equal(inbox[0].offerId,winning.id);
+      const requesterTracking=await readModels.getMissionTracking({
+        principal:{actorId:requester,role:"requester"},missionId:mission,now:stamp,
+      });
+      assert.equal(requesterTracking.missionId,mission);
+      assert.equal(requesterTracking.legs.length,2);
+      const forbiddenTracking=await readModels.getMissionTracking({
+        principal:{actorId:runnerTwo,role:"runner"},missionId:mission,now:stamp,
+      });
+      assert.equal(forbiddenTracking,null,"a Runner not assigned to a mission cannot read its tracking view");
+      const dispatcherQueue=await readModels.getDispatcherQueue({
+        principal:{actorId:dispatcher,role:"dispatcher"},now:stamp,
+      });
+      assert.ok(dispatcherQueue.some(item=>item.activeOfferId===winning.id),
+        "dispatcher queue includes the live offer for its leg");
       const replay=await createDispatchOffer({...base,offerId:randomUUID(),eventId:randomUUID(),idempotencyKey:winning.idempotencyKey});
       assert.equal(replay.ok,true);
       assert.equal(replay.offer.id,winning.id,"same dispatcher idempotency key returns the original offer");
