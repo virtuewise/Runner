@@ -80,6 +80,80 @@ paths:
         '200': { description: Mission published; returns updated mission projection }
         '403': { $ref: '#/components/responses/ApiError' }
         '409': { $ref: '#/components/responses/ApiError' }
+  /v1/missions/{missionId}/tracking:
+    parameters:
+      - $ref: '#/components/parameters/MissionId'
+    get:
+      summary: Read an authorized mission and relay tracking projection
+      description: Requesters and assigned Runners may read their mission. Dispatch and trust roles require server-side authorization. Location is returned only while active-mission consent is enabled and the snapshot is fresh.
+      responses:
+        '200':
+          description: Mission and relay tracking projection
+        '401': { $ref: '#/components/responses/ApiError' }
+        '404': { $ref: '#/components/responses/ApiError' }
+  /v1/runner/availability:
+    get:
+      summary: Read the authenticated Runner's availability windows
+      responses:
+        '200':
+          description: Availability windows
+        '401': { $ref: '#/components/responses/ApiError' }
+        '403': { $ref: '#/components/responses/ApiError' }
+    post:
+      summary: Create an availability window for the authenticated Runner
+      description: Runner identity is derived from the verified bearer principal, never from the request body.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RunnerAvailabilityInput'
+      responses:
+        '200': { description: Availability window recorded }
+        '400': { $ref: '#/components/responses/ApiError' }
+        '401': { $ref: '#/components/responses/ApiError' }
+        '403': { $ref: '#/components/responses/ApiError' }
+  /v1/runner/offers:
+    get:
+      summary: Read the authenticated Runner's active offer inbox
+      responses:
+        '200':
+          description: Unexpired offers for open mission legs
+        '401': { $ref: '#/components/responses/ApiError' }
+        '403': { $ref: '#/components/responses/ApiError' }
+  /v1/runner/offers/respond:
+    post:
+      summary: Accept or decline an offer assigned to the authenticated Runner
+      description: Acceptance revalidates eligibility and commits assignment atomically. Repeated responses are handled by the offer lifecycle command.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RunnerOfferDecision'
+      responses:
+        '200': { description: Offer response committed or replayed }
+        '400': { $ref: '#/components/responses/ApiError' }
+        '401': { $ref: '#/components/responses/ApiError' }
+        '403': { $ref: '#/components/responses/ApiError' }
+        '404': { $ref: '#/components/responses/ApiError' }
+        '409': { $ref: '#/components/responses/ApiError' }
+        '410': { description: Offer expired }
+  /v1/operations/dispatch-queue:
+    get:
+      summary: Read the operational dispatch queue
+      description: Requires a server-authorized dispatcher or trust-operator principal. Safety holds and disputes are prioritized. Location is consented and freshness-limited.
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 250, default: 100 }
+      responses:
+        '200':
+          description: Dispatch queue with mission, leg, offer and fresh Runner location projections
+        '401': { $ref: '#/components/responses/ApiError' }
+        '403': { $ref: '#/components/responses/ApiError' }
+        '400': { $ref: '#/components/responses/ApiError' }
 components:
   securitySchemes:
     bearerAuth:
@@ -133,6 +207,21 @@ components:
         requiredVehicleClass:
           type: string
           enum: [foot, bicycle, motorcycle, car, van]
+    RunnerAvailabilityInput:
+      type: object
+      additionalProperties: false
+      required: [availableFrom, availableUntil, status]
+      properties:
+        availableFrom: { type: string, format: date-time }
+        availableUntil: { type: string, format: date-time }
+        status: { type: string, enum: [available, unavailable] }
+    RunnerOfferDecision:
+      type: object
+      additionalProperties: false
+      required: [offerId, decision]
+      properties:
+        offerId: { type: string, format: uuid }
+        decision: { type: string, enum: [accept, decline] }
     ApiError:
       type: object
       required: [error]
