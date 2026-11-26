@@ -36,6 +36,7 @@ export async function declineDispatchOffer(input: {
     const offer = await tx.loadOfferForUpdate(input.offerId);
     if (!offer) return { ok: false, reason: "NOT_FOUND" };
     if (offer.runnerId !== input.authenticatedRunnerId) return { ok: false, reason: "FORBIDDEN" };
+    if (offer.status === "declined") return { ok: true, offer, replayed: true };
     if (offer.status !== "offered") return { ok: false, reason: "NOT_PENDING" };
     if (Date.parse(offer.expiresAt) <= Date.parse(input.now)) return { ok: false, reason: "EXPIRED" };
     if (!await tx.declineOffer({ offerId: offer.id, runnerId: input.authenticatedRunnerId, now: input.now, expectedVersion: offer.version }))
