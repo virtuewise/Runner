@@ -9,9 +9,10 @@ export interface CustodyTransaction {
   createChallenge(challenge: CustodyChallenge): Promise<void>;
   loadChallengeForUpdate(challengeId: string): Promise<CustodyChallenge | null>;
   saveChallenge(challenge: CustodyChallenge, expectedVersion: number): Promise<boolean>;
+  expireChallenges(now: string, limit: number): Promise<readonly CustodyChallenge[]>;
   appendCustodyEvent(input: { readonly challengeId: string; readonly missionId: string; readonly legId: string;
     readonly actorId: string; readonly type: "custody.challenge_issued" | "custody.release_confirmed" |
-      "custody.receive_confirmed" | "custody.handover_confirmed" | "custody.challenge_invalidated";
+      "custody.receive_confirmed" | "custody.handover_confirmed" | "custody.challenge_invalidated" | "custody.challenge_expired";
     readonly occurredAt: string }): Promise<void>;
 }
 export interface CustodyRepository { transaction<T>(work: (tx: CustodyTransaction) => Promise<T>): Promise<T>; }
@@ -60,7 +61,13 @@ export async function confirmCustody(input: {
     const challenge = await tx.loadChallengeForUpdate(input.challengeId);
     if (!challenge) return { ok: false, reason: "NOT_FOUND" };
     if (challenge.status !== "pending") return { ok: false, reason: "REPLAYED" };
-    if (Date.parse(challenge.expiresAt) <= now) return { ok: false, reason: "EXPIRED" };
+    if (Date.parse(challenge.expiresAt) <= now) {
+      const expired: CustodyChallenge = { ...challenge, status: "expired", version: challenge.version + 1 };
+      if (!await tx.saveChallenge(expired, challenge.version)) return { ok: false, reason: "CONFLICT" };
+      await tx.appendCustodyEvent({ challengeId: challenge.id, missionId: challenge.missionId, legId: challenge.legId,
+        actorId: "00000000-0000-0000-0000-000000000000", type: "custody.challenge_expired", occurredAt: input.now });
+      return { ok: false, reason: "EXPIRED" };
+    }
     if (input.actorId !== challenge.releasingActorId && input.actorId !== challenge.receivingActorId)
       return { ok: false, reason: "FORBIDDEN" };
     if ((input.actorId === challenge.releasingActorId && challenge.releaseConfirmedAt) ||
@@ -78,5 +85,22 @@ export async function confirmCustody(input: {
         input.actorId === challenge.releasingActorId ? "custody.release_confirmed" : "custody.receive_confirmed",
       occurredAt: input.now });
     return { ok: true, challenge: { ...saved, tokenHash: "[redacted]" } };
+  });
+}
+
+
+/** Scheduled cleanup: expire stale pending challenges so they cannot block a fresh handover. */
+export async function expireCustodyChallenges(input: {
+  readonly repository: CustodyRepository; readonly now: string; readonly batchSize?: number;
+}): Promise<number> {
+  const now = Date.parse(input.now), limit = input.batchSize ?? 100;
+  if (!Number.isFinite(now) || !Number.isSafeInteger(limit) || limit < 1 || limit > 1000)
+    throw new Error("Invalid custody expiry batch");
+  return input.repository.transaction(async (tx) => {
+    const expired = await tx.expireChallenges(input.now, limit);
+    for (const challenge of expired) await tx.appendCustodyEvent({ challengeId: challenge.id,
+      missionId: challenge.missionId, legId: challenge.legId,
+      actorId: "00000000-0000-0000-0000-000000000000", type: "custody.challenge_expired", occurredAt: input.now });
+    return expired.length;
   });
 }
