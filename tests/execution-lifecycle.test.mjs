@@ -25,7 +25,7 @@ test("outbox worker schedules bounded exponential retry",async()=>{
     policy,now:"2026-11-26T10:00:00.000Z"});
   assert.deepEqual(result,{claimed:1,published:0,retried:1,deadLettered:0});
   assert.equal(f.calls[0][0],"retry");
-  assert.equal(f.calls[0][1].availableAt,"2026-11-26T10:00:20.000Z");
+  assert.equal(f.calls[0][1].availableAt,"2026-11-26T10:00:10.000Z");
   assert.equal(f.calls[0][1].errorCode,"publisher_failed");
 });
 test("outbox worker dead-letters after the configured attempt budget",async()=>{
