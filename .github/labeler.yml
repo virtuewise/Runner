@@ -1,0 +1,14 @@
+bug:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/**"
+          - "tests/**"
+          - "database/**"
+
+enhancement:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "app/**"
+          - "src/**"
+          - "docs/**"
+          - "*.md"
