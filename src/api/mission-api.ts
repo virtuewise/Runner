@@ -98,9 +98,9 @@ function domainFault(result: { readonly error: { readonly code: string; readonly
 function versionHeader(request: Request): number | null {
   const value = request.headers.get("if-match");
   if (!value) return null;
-  const unquoted = value.replace(/^W\\//, "").replace(/^"|"$/g, "");
-  if (!/^(0|[1-9][0-9]*)$/.test(unquoted)) return null;
-  const parsed = Number(unquoted);
+  const match = /^(?:W\\/)?"?([0-9]+)"?$/.exec(value.trim());
+  if (!match?.[1]) return null;
+  const parsed = Number(match[1]);
   return Number.isSafeInteger(parsed) ? parsed : null;
 }
 function idempotencyKey(request: Request): string | null {
