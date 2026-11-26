@@ -51,6 +51,9 @@ class PostgresExecutionTransaction implements ExecutionTransaction {
   private currentNow:string="";
   constructor(client:PgClient){this.client=client;}
 
+  async lockDispatchIdempotency(dispatcherId:string,key:string):Promise<void>{
+    await this.client.query("select pg_advisory_xact_lock(hashtextextended($1,0))",[dispatcherId+":"+key]);
+  }
   async findOfferByIdempotencyKey(dispatcherId:string,key:string):Promise<DispatchOffer|null>{
     const q=await this.client.query<OfferRow>(`select * from public.dispatch_offers where dispatcher_id=$1 and idempotency_key=$2`,[dispatcherId,key]);
     return q.rows[0]?offerFromRow(q.rows[0]):null;
