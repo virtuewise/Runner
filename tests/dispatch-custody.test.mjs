@@ -49,7 +49,7 @@ function custodyFixture(){
 test("custody completes only after both authenticated parties confirm",async()=>{
   const f=custodyFixture();
   const issued=await issueCustodyChallenge({repository:f.repository,crypto:f.crypto,challengeId:"c1",missionId:"m1",legId:"l1",
-    releasingActorId:"sender",receivingActorId:"receiver",purpose:"relay_handover",now:"2026-11-26T10:00:00.000Z",ttlSeconds:120});
+    releasingActorId:"sender",receivingActorId:"receiver",purpose:"final_delivery",now:"2026-11-26T10:00:00.000Z",ttlSeconds:120});
   assert.equal(issued.ok,true);assert.equal(issued.challenge.tokenHash,"[redacted]");
   const token=issued.plaintextToken;
   const first=await confirmCustody({repository:f.repository,crypto:f.crypto,challengeId:"c1",actorId:"sender",token,now:"2026-11-26T10:00:10.000Z"});
