@@ -1,6 +1,6 @@
 # Dispatch & Custody Operational Readiness
 
-Status: Engineering baseline only. Not approved for production use.
+Status: Execution infrastructure implemented in a review branch; production pilot not approved.
 
 ## Dispatch invariants
 - Planner output is advisory. Re-read current Runner identity, qualification, capabilities, vehicle, jurisdiction, availability and capacity inside the assignment transaction.
@@ -27,5 +27,12 @@ Status: Engineering baseline only. Not approved for production use.
 ## Rollout
 Shadow evaluation → dispatcher-assisted offers → limited automation behind a feature flag → controlled zone expansion. Keep manual dispatch and trust-operator override available with audit trails.
 
+## Implemented in the execution infrastructure branch
+- PostgreSQL leg claims use row locks and `SKIP LOCKED`; Runner capacity reservations serialize on the Runner profile row.
+- Dispatcher-scoped offer idempotency, authenticated runner acceptance/decline commands, expiry batching and reassignment invalidation are implemented.
+- Outbox messages use leases, at-least-once publication, bounded retry and dead-letter state.
+- Custody challenges use a production Web Crypto adapter, persistent SHA-256 digests, row-locked two-party confirmation and reassignment invalidation.
+- CI now provisions ephemeral PostgreSQL and runs migration/concurrency integration coverage.
+
 ## Known limitations
-This branch defines domain orchestration and schema extensions. Concrete PostgreSQL dispatch/custody adapters, offer acceptance and expiry workers, notification delivery, rate limiting, production authentication, live location ingestion, deployment and operational UAT remain release gates. This is not a live dispatch service.
+This branch defines domain orchestration and schema extensions. Production identity-provider integration, worker supervision/scheduling, notification-provider integration, rate limiting, production deployment, alert thresholds, human fallback exercises and operational UAT remain release gates. The PostgreSQL CI suite is not a substitute for production load, security or jurisdictional validation. This is not a live dispatch service.
