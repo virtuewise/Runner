@@ -164,7 +164,7 @@ paths:
           required: false
           schema: { type: integer, minimum: 1, maximum: 250, default: 100 }
       responses:
-        '200': { description: Open, triaged and investigating incidents }
+        '200': { description: "Open, triaged and investigating incidents" }
         '401': { $ref: '#/components/responses/ApiError' }
         '403': { $ref: '#/components/responses/ApiError' }
         '400': { $ref: '#/components/responses/ApiError' }
