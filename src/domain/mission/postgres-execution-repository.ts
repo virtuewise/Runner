@@ -154,6 +154,8 @@ class PostgresExecutionTransaction implements ExecutionTransaction {
       join public.mission_legs l on l.id=o.leg_id
       join public.missions m on m.id=l.mission_id
       where o.id=$1 and o.runner_id=$2 and o.status='offered' and o.expires_at>$3
+        and m.status in ('open','matching') and l.status='open'
+        and l.service_window_start<=$3 and l.service_window_end>=$3
         and rp.identity_status='verified' and rp.qualification_status='qualified' and rp.is_active
         and rp.max_active_legs > (select count(*) from public.mission_legs active
           where active.assigned_runner_id=rp.runner_id and active.status not in ('delivered','cancelled','failed'))
