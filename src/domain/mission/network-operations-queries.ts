@@ -2,6 +2,12 @@ export type OperationsPrincipal =
   | { readonly actorId: string; readonly role: "runner" | "requester" }
   | { readonly actorId: string; readonly role: "dispatcher" | "trust_operator" };
 
+export interface RunnerAvailabilityView {
+  readonly id: string;
+  readonly availableFrom: string;
+  readonly availableUntil: string;
+  readonly status: "available" | "unavailable";
+}
 export interface RunnerOfferInboxItem {
   readonly offerId: string;
   readonly missionId: string;
@@ -96,6 +102,22 @@ function mapLocation(row: RawRow): MissionTrackingLeg["location"] {
 export class PostgresNetworkOperationsQueries {
   private readonly pool: NetworkOperationsReadPool;
   constructor(pool: NetworkOperationsReadPool) { this.pool = pool; }
+
+  async getRunnerAvailability(input: {
+    readonly authenticatedRunnerId: string;
+    readonly now: string;
+  }): Promise<readonly RunnerAvailabilityView[]> {
+    if (!input.authenticatedRunnerId || !Number.isFinite(Date.parse(input.now)))
+      throw new Error("Invalid Runner availability query");
+    const result = await this.pool.query<RawRow>(`select id,available_from,available_until,status
+      from public.runner_availability_windows
+      where runner_id=$1 and status in ('available','unavailable') and available_until>$2::timestamptz
+      order by available_from asc limit 100`,[input.authenticatedRunnerId,input.now]);
+    return result.rows.map(row => ({
+      id: row.id, availableFrom: asIso(row.available_from)!,
+      availableUntil: asIso(row.available_until)!, status: row.status,
+    }));
+  }
 
   async getRunnerOfferInbox(input: {
     readonly authenticatedRunnerId: string;
