@@ -9,7 +9,7 @@ Make the execution engine operationally legible to Runners, dispatchers, request
 ## Delivery sequence
 
 1. **Network ingestion and API foundation** — consented Runner location, availability windows, freshness/sequence validation, expiry, privacy boundaries, authenticated offer inbox/response handlers, tracking and dispatcher read models.
-2. **Runner experience** — availability controls, offer inbox, offer detail, accept/decline, mission checklist and custody QR/NFC handover surfaces. Typed offer-inbox presentation component is now implemented; authentication/API wiring and mobile navigation remain open.
+2. **Runner experience** — availability controls, offer inbox, offer detail, accept/decline, mission checklist and custody QR/NFC handover surfaces. Typed offer-inbox presentation component is implemented; authenticated offer and availability handlers plus Runner-controlled location consent are available as Fetch API building blocks. Mobile navigation and production identity wiring remain open.
 3. **Dispatcher command centre** — dispatch queue, eligible Runner capacity, offer state, mission/relay timeline, stale-location warnings and controlled reassignment. Typed command-centre and mission-timeline presentation components are now implemented; role-gated API wiring and UAT remain open.
 4. **Mission tracking** — requester and operations views over authoritative mission/leg events; location is supplemental and freshness-labelled.
 5. **Trust operations** — incident intake, safety holds, disputes, evidence references, escalation and resolution audit. Initial audited incident persistence and trust-operator commands are now implemented.
