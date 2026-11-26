@@ -21,7 +21,7 @@ test("PostgreSQL execution integration: migrations, concurrent dispatch, offer l
       for(const file of ["202611250001_mission_persistence.sql","202611260001_dispatch_custody.sql","202611260002_execution_infrastructure.sql"])
         await pool.query(await readFile(resolve(root,"database/migrations",file),"utf8"));
 
-      const requester=randomUUID(),dispatcher=randomUUID(),runner=randomUUID(),mission=randomUUID();
+      const requester=randomUUID(),dispatcher=randomUUID(),runner=randomUUID(),runnerTwo=randomUUID(),mission=randomUUID();
       const legOne=randomUUID(),legTwo=randomUUID();
       const now=new Date(),start=new Date(now.getTime()-60_000),end=new Date(now.getTime()+3_600_000);
       const stamp=now.toISOString();
@@ -31,6 +31,12 @@ test("PostgreSQL execution integration: migrations, concurrent dispatch, offer l
       await pool.query(`insert into public.runner_jurisdictions(runner_id,country_code,status) values($1,'ZA','approved')`,[runner]);
       await pool.query(`insert into public.runner_availability_windows(runner_id,available_from,available_until,status)
         values($1,$2,$3,'available')`,[runner,start.toISOString(),end.toISOString()]);
+      await pool.query(`insert into public.runner_profiles(runner_id,identity_status,qualification_status,is_active,
+        vehicle_class,max_active_legs) values($1,'verified','qualified',true,'car',1)`,[runnerTwo]);
+      await pool.query(`insert into public.runner_capabilities(runner_id,capability_code,status) values($1,'sealed_parcel','verified')`,[runnerTwo]);
+      await pool.query(`insert into public.runner_jurisdictions(runner_id,country_code,status) values($1,'ZA','approved')`,[runnerTwo]);
+      await pool.query(`insert into public.runner_availability_windows(runner_id,available_from,available_until,status)
+        values($1,$2,$3,'available')`,[runnerTwo,start.toISOString(),end.toISOString()]);
       await pool.query(`insert into public.missions(id,requester_id,status,category,manifest,pickup,destination,
         declared_value_minor,currency,version) values($1,$2,'open','parcel',$3::jsonb,$4::jsonb,$5::jsonb,1000,'ZAR',0)`,
         [mission,requester,JSON.stringify({description:"sealed parcel",weightGrams:500,requiredCapabilities:["sealed_parcel"],
@@ -41,6 +47,7 @@ test("PostgreSQL execution integration: migrations, concurrent dispatch, offer l
         (id,mission_id,leg_number,mode,status,origin,destination,jurisdiction_codes,service_window_start,service_window_end)
         values($1,$2,$3,'car','open',$4::jsonb,$5::jsonb,array['ZA'],$6,$7)`,
         [id,mission,n,JSON.stringify({countryCode:"ZA"}),JSON.stringify({countryCode:"ZA"}),start.toISOString(),end.toISOString()]);
+      await pool.query("update public.mission_legs set status='assigned',assigned_runner_id=$1 where id=$2",[runnerTwo,legTwo]);
 
       const execution=createPostgresExecutionRepository(pool);
       const dispatch=createPostgresDispatchRepository(pool);
@@ -99,6 +106,18 @@ test("PostgreSQL execution integration: migrations, concurrent dispatch, offer l
       assert.deepEqual(reassignmentReplay,{offersRevoked:0,challengesInvalidated:0});
       const stillAccepted=await pool.query("select status from public.dispatch_offers where id=$1",[duplicateOffer.id]);
       assert.equal(stillAccepted.rows[0].status,"accepted","replayed reassignment must not revoke later work");
+
+      const relayChallenge=await issueCustodyChallenge({repository:custody,crypto:productionCustodyCrypto,
+        challengeId:randomUUID(),missionId:mission,legId:legOne,receivingLegId:legTwo,releasingActorId:runner,
+        receivingActorId:runnerTwo,purpose:"relay_handover",now:stamp,ttlSeconds:120});
+      assert.equal(relayChallenge.ok,true);
+      const relayRelease=await confirmCustody({repository:custody,crypto:productionCustodyCrypto,
+        challengeId:relayChallenge.challenge.id,actorId:runner,token:relayChallenge.plaintextToken,now:stamp});
+      const relayReceive=await confirmCustody({repository:custody,crypto:productionCustodyCrypto,
+        challengeId:relayChallenge.challenge.id,actorId:runnerTwo,token:relayChallenge.plaintextToken,now:stamp});
+      assert.equal(relayRelease.ok,true);
+      assert.equal(relayReceive.ok,true);
+      assert.equal(relayReceive.challenge.status,"confirmed");
 
       const challenge=await issueCustodyChallenge({repository:custody,crypto:productionCustodyCrypto,
         challengeId:randomUUID(),missionId:mission,legId:winning.legId,releasingActorId:runner,
