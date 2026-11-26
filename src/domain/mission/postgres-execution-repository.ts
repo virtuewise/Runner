@@ -38,7 +38,7 @@ function offerFromRow(row:OfferRow):DispatchOffer {
 function custodyFromRow(row:CustodyRow):CustodyChallenge {
   return {id:row.challenge_id,missionId:row.mission_id,legId:row.from_leg_id??row.to_leg_id??"",
     releasingActorId:row.releasing_actor_id,receivingActorId:row.receiving_actor_id,
-    purpose:row.purpose as CustodyChallenge["purpose"],tokenHash:row.token_hash_hex,
+    ...(row.to_leg_id?{receivingLegId:row.to_leg_id}:{}),purpose:row.purpose as CustodyChallenge["purpose"],tokenHash:row.token_hash_hex,
     expiresAt:iso(row.expires_at),status:row.invalidated_at?"invalidated":
       row.status==="confirmed"?"confirmed":row.status==="expired"?"expired":row.status==="disputed"?"disputed":"pending",
     ...(row.release_confirmed_at?{releaseConfirmedAt:iso(row.release_confirmed_at)}:{}),
@@ -239,12 +239,35 @@ class PostgresExecutionTransaction implements ExecutionTransaction {
   }
 
   async createChallenge(challenge:CustodyChallenge):Promise<void>{
+    const legIds=[challenge.legId,...(challenge.receivingLegId?[challenge.receivingLegId]:[])];
+    await this.client.query("select id from public.mission_legs where id=any($1::uuid[]) order by id for update",[legIds]);
+    const validation=await this.client.query<{requester_id:string;from_runner_id:string|null;from_status:string;
+      to_runner_id:string|null;to_status:string|null}>(`select m.requester_id,l.assigned_runner_id as from_runner_id,l.status as from_status,
+        tl.assigned_runner_id as to_runner_id,tl.status as to_status
+      from public.mission_legs l join public.missions m on m.id=l.mission_id
+      left join public.mission_legs tl on tl.id=$3 and tl.mission_id=m.id
+      where l.id=$2 and m.id=$1`,[challenge.missionId,challenge.legId,challenge.receivingLegId??null]);
+    const row=validation.rows[0];
+    if(!row)throw new Error("Custody challenge mission/leg relationship is invalid");
+    const active=["assigned","runner_en_route","at_pickup","in_custody","en_route_to_handover","handover_pending"];
+    if(!active.includes(row.from_status))throw new Error("Releasing leg is not in a custody-capable state");
+    if(challenge.purpose==="pickup" &&
+      !(row.requester_id===challenge.releasingActorId && row.from_runner_id===challenge.receivingActorId))
+      throw new Error("Pickup custody parties do not match requester and assigned Runner");
+    if(challenge.purpose==="final_delivery" &&
+      !(row.from_runner_id===challenge.releasingActorId && row.requester_id===challenge.receivingActorId))
+      throw new Error("Final delivery custody parties do not match assigned Runner and requester");
+    if(challenge.purpose==="relay_handover" &&
+      !(challenge.receivingLegId && row.from_runner_id===challenge.releasingActorId &&
+        row.to_runner_id===challenge.receivingActorId && row.to_status && active.includes(row.to_status)))
+      throw new Error("Relay custody parties must be the assigned Runners on both legs");
     await this.client.query(`insert into public.custody_handovers
       (id,mission_id,from_leg_id,to_leg_id,releasing_actor_id,receiving_actor_id,token_hash,evidence_type,status,
        challenge_id,purpose,expires_at,version,evidence_metadata)
-      values($1,$2,$3,null,$4,$5,decode($6,'hex'),'dual_confirmation','initiated',$1,$7,$8,$9,'{}'::jsonb)`,
-      [challenge.id,challenge.missionId,challenge.legId,challenge.releasingActorId,challenge.receivingActorId,
-        challenge.tokenHash,challenge.purpose,challenge.expiresAt,challenge.version]);
+      values($1,$2,$3,$4,$5,$6,decode($7,'hex'),'dual_confirmation','initiated',$1,$8,$9,$10,'{}'::jsonb)`,
+      [challenge.id,challenge.missionId,challenge.legId,challenge.receivingLegId??null,
+        challenge.releasingActorId,challenge.receivingActorId,challenge.tokenHash,challenge.purpose,
+        challenge.expiresAt,challenge.version]);
   }
   async loadChallengeForUpdate(id:string):Promise<CustodyChallenge|null>{
     const q=await this.client.query<CustodyRow>(`select challenge_id,mission_id,from_leg_id,to_leg_id,releasing_actor_id,
