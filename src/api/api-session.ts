@@ -25,7 +25,7 @@ export function createApiSession(options: ApiSessionOptions) {
   async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     if (!path.startsWith("/v1/") || path.startsWith("//")) throw new Error("API path must be an absolute v1 route");
     const url = new URL(path, base);
-    if (url.origin !== base.origin) throw new Error("API path escaped configured origin");
+    if (url.origin !== base.origin || !url.pathname.startsWith("/v1/")) throw new Error("API path escaped configured v1 origin");
     const accessToken = await options.getAccessToken();
     if (!accessToken || accessToken.length > 8192) throw new ApiSessionError(401, "UNAUTHENTICATED");
     const headers = new Headers(init.headers);
