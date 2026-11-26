@@ -235,7 +235,7 @@ class PostgresExecutionTransaction implements ExecutionTransaction {
       type:"dispatch.leg_reassigned",occurredAt:input.occurredAt,idempotencyKey:input.idempotencyKey,
       metadata:{legId:input.legId,reason:input.reason}});
   }
-  async recordOfferEvent(input:{offer:DispatchOffer;actorId:string;actorRole:"runner"|"dispatcher"|"system";
+  async recordOfferEvent(input:{offer:DispatchOffer;actorId:string;actorRole:"runner"|"dispatcher"|"trust_operator"|"system";
     eventType:string;reason:string;occurredAt:string;idempotencyKey:string}):Promise<void>{
     await this.insertMissionEvent({missionId:input.offer.missionId,actorId:input.actorId,actorRole:input.actorRole,
       type:input.eventType,occurredAt:input.occurredAt,idempotencyKey:input.idempotencyKey,
