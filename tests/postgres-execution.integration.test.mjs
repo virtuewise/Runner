@@ -70,7 +70,7 @@ test("PostgreSQL execution integration: migrations, concurrent dispatch, offer l
 
       const invalidatedChallenge=await issueCustodyChallenge({repository:custody,crypto:productionCustodyCrypto,
         challengeId:randomUUID(),missionId:mission,legId:winning.legId,releasingActorId:runner,
-        receivingActorId:requester,purpose:"relay_handover",now:stamp,ttlSeconds:120});
+        receivingActorId:requester,purpose:"final_delivery",now:stamp,ttlSeconds:120});
       assert.equal(invalidatedChallenge.ok,true);
       const reassignment=await reassignDispatchLeg({repository:execution,legId:winning.legId,now:stamp,
         actorId:dispatcher,actorRole:"dispatcher",reason:"operational reassignment test"});
@@ -89,6 +89,11 @@ test("PostgreSQL execution integration: migrations, concurrent dispatch, offer l
       assert.equal(duplicateAttempts.filter(x=>x.ok).length,2);
       assert.equal(duplicateAttempts[0].offer.id,duplicateAttempts[1].offer.id,
         "parallel retries with one idempotency key must resolve to one persisted offer");
+
+      const duplicateOffer=duplicateAttempts[0].offer;
+      const duplicateAccepted=await acceptDispatchOffer({repository:execution,offerId:duplicateOffer.id,
+        authenticatedRunnerId:runner,now:stamp});
+      assert.equal(duplicateAccepted.ok,true);
 
       const challenge=await issueCustodyChallenge({repository:custody,crypto:productionCustodyCrypto,
         challengeId:randomUUID(),missionId:mission,legId:winning.legId,releasingActorId:runner,
@@ -109,7 +114,7 @@ test("PostgreSQL execution integration: migrations, concurrent dispatch, offer l
 
       const expiring=await issueCustodyChallenge({repository:custody,crypto:productionCustodyCrypto,
         challengeId:randomUUID(),missionId:mission,legId:winning.legId,releasingActorId:runner,
-        receivingActorId:requester,purpose:"pickup",now:stamp,ttlSeconds:30});
+        receivingActorId:requester,purpose:"final_delivery",now:stamp,ttlSeconds:30});
       assert.equal(expiring.ok,true);
       const expiredCount=await expireCustodyChallenges({repository:custody,
         now:new Date(Date.parse(stamp)+31_000).toISOString(),batchSize:10});
