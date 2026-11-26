@@ -218,6 +218,14 @@ class PostgresExecutionTransaction implements ExecutionTransaction {
       idempotencyKey:"invalidate:"+row.challenge_id,metadata:{challengeId:row.challenge_id,legId:input.legId}});
     return pending.rows.length;
   }
+  async appendReassignmentEvent(input:{legId:string;actorId:string;actorRole:"dispatcher"|"trust_operator";
+    reason:string;occurredAt:string;idempotencyKey:string}):Promise<void>{
+    const leg=await this.client.query<{mission_id:string}>(`select mission_id from public.mission_legs where id=$1`,[input.legId]);
+    if(!leg.rows[0])throw new Error("Cannot audit reassignment for missing leg");
+    await this.insertMissionEvent({missionId:leg.rows[0].mission_id,actorId:input.actorId,actorRole:input.actorRole,
+      type:"dispatch.leg_reassigned",occurredAt:input.occurredAt,idempotencyKey:input.idempotencyKey,
+      metadata:{legId:input.legId,reason:input.reason}});
+  }
   async recordOfferEvent(input:{offer:DispatchOffer;actorId:string;actorRole:"runner"|"dispatcher"|"system";
     eventType:string;reason:string;occurredAt:string;idempotencyKey:string}):Promise<void>{
     await this.insertMissionEvent({missionId:input.offer.missionId,actorId:input.actorId,actorRole:input.actorRole,
