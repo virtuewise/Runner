@@ -51,7 +51,7 @@ test("incident resolution requires an auditable resolution code and note",async(
   actor:{actorId:"requester",role:"requester"},idempotencyKey:"report-001",category:"loss",severity:"high",
   title:"Parcel missing",description:"The parcel could not be located.",now});
  await assert.rejects(()=>transitionMissionIncident({repository:f.repository,incidentId:"i1",
-  actor:{actorId:"trust",role:"trust_operator"},expectedVersion:1,nextStatus:"resolved",
+  actor:{actorId:"trust",role:"trust_operator"},expectedVersion:1,nextStatus:"dismissed",
   idempotencyKey:"resolve-1",now}),/Resolution code and note are required/);
 });
 test("safety hold is restricted to trust operators and supports idempotent replay",async()=>{
